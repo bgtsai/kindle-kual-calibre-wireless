@@ -1,0 +1,282 @@
+// calibre-wireless — Kindle client for calibre's "wireless device connection"
+// (Smart Device App protocol), built on the UNCaGED library.
+//
+// v0.1.0 prototype: discover calibre, receive / list / delete books.
+// Not yet: Kindle thumbnails, library rescan, airplane mode, sleep prevention,
+// auto-disconnect timers (see HANDOFF / README roadmap).
+//
+// Copyright (C) 2026 bgtsai. Licensed under GPL-3.0-or-later (UNCaGED is GPL-3.0).
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/shermp/UNCaGED/uc"
+)
+
+const version = "0.1.0"
+
+// client implements uc.Client. Metadata for every book calibre sent is kept in
+// one JSON file (stateFile) so calibre's "On device" column survives reconnects.
+type client struct {
+	bookDir   string
+	stateFile string
+	devName   string
+	books     []uc.CalibreBookMeta
+	devInfo   uc.DeviceInfo
+	exitChan  chan<- bool
+}
+
+type state struct {
+	Books   []uc.CalibreBookMeta `json:"books"`
+	DevInfo uc.DeviceInfo        `json:"device_info"`
+}
+
+func (c *client) load() error {
+	b, err := os.ReadFile(c.stateFile)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var s state
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("state file %s is corrupt: %w", c.stateFile, err)
+	}
+	// Drop entries whose file was deleted on the Kindle (e.g. from the Kindle UI),
+	// otherwise calibre would keep showing them as "on device".
+	for _, md := range s.Books {
+		if _, err := os.Stat(filepath.Join(c.bookDir, md.Lpath)); err == nil {
+			c.books = append(c.books, md)
+		} else {
+			log.Printf("state: %s no longer on device, dropped", md.Lpath)
+		}
+	}
+	c.devInfo = s.DevInfo
+	return nil
+}
+
+// save writes to a temp file then renames, so a crash mid-write can't corrupt the list.
+func (c *client) save() error {
+	b, err := json.Marshal(state{Books: c.books, DevInfo: c.devInfo})
+	if err != nil {
+		return err
+	}
+	tmp := c.stateFile + ".tmp"
+	if err := os.WriteFile(tmp, b, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, c.stateFile)
+}
+
+func (c *client) find(lpath string) int {
+	for i, md := range c.books {
+		if md.Lpath == lpath {
+			return i
+		}
+	}
+	return -1
+}
+
+func (c *client) SelectCalibreInstance(ins []uc.CalInstance) uc.CalInstance {
+	log.Printf("found %d calibre instance(s), using %s at %s", len(ins), ins[0].Name, ins[0].Host)
+	return ins[0]
+}
+
+func (c *client) GetClientOptions() (uc.ClientOptions, error) {
+	var o uc.ClientOptions
+	o.ClientName = "calibre-wireless"
+	o.DeviceName = c.devName
+	o.DeviceModel = "Kindle"
+	// Formats the Kindle reader opens natively; calibre converts others to the first one it can.
+	o.SupportedExt = []string{"azw3", "mobi", "azw", "pdf", "txt", "kfx"}
+	o.CoverDims.Width = 330 // Kindle home-screen thumbnail size class; tuned later
+	o.CoverDims.Height = 470
+	return o, nil
+}
+
+func (c *client) GetDeviceBookList() ([]uc.BookCountDetails, error) {
+	if len(c.books) == 0 {
+		return nil, nil
+	}
+	out := make([]uc.BookCountDetails, len(c.books))
+	for i, md := range c.books {
+		lm := time.Now()
+		if t := md.LastModified.GetTime(); t != nil {
+			lm = *t
+		}
+		out[i] = uc.BookCountDetails{UUID: md.UUID, Lpath: md.Lpath,
+			Extension: filepath.Ext(md.Lpath), LastModified: lm}
+	}
+	return out, nil
+}
+
+type iter struct {
+	list []uc.CalibreBookMeta
+	pos  int
+}
+
+func (it *iter) Next() bool { it.pos++; return it.pos < len(it.list) }
+func (it *iter) Count() int { return len(it.list) }
+func (it *iter) Get() (uc.CalibreBookMeta, error) {
+	if it.pos < 0 || it.pos >= len(it.list) {
+		return uc.CalibreBookMeta{}, errors.New("metadata iterator out of range")
+	}
+	return it.list[it.pos], nil
+}
+
+func (c *client) GetMetadataIter(ids []uc.BookID) uc.MetadataIter {
+	if ids == nil {
+		return &iter{list: c.books, pos: -1}
+	}
+	var sel []uc.CalibreBookMeta
+	for _, id := range ids {
+		if i := c.find(id.Lpath); i >= 0 {
+			sel = append(sel, c.books[i])
+		}
+	}
+	return &iter{list: sel, pos: -1}
+}
+
+func (c *client) GetDeviceInfo() (uc.DeviceInfo, error) { return c.devInfo, nil }
+
+func (c *client) SetDeviceInfo(d uc.DeviceInfo) error {
+	c.devInfo.DevInfo = d.DevInfo
+	return c.save()
+}
+
+func (c *client) SetLibraryInfo(uc.CalibreLibraryInfo) error { return nil }
+
+func (c *client) UpdateMetadata(list []uc.CalibreBookMeta) error {
+	for _, md := range list {
+		if i := c.find(md.Lpath); i >= 0 {
+			c.books[i] = md
+		}
+	}
+	return c.save()
+}
+
+func (c *client) GetPassword(uc.CalibreInitInfo) (string, error) { return "", nil }
+
+func (c *client) GetFreeSpace() uint64 {
+	var s syscall.Statfs_t
+	if err := syscall.Statfs(c.bookDir, &s); err != nil {
+		log.Printf("statfs %s failed: %v", c.bookDir, err)
+		return 0
+	}
+	return uint64(s.Bavail) * uint64(s.Bsize)
+}
+
+func (c *client) CheckLpath(lpath string) string { return lpath }
+
+func (c *client) SaveBook(md uc.CalibreBookMeta, r io.Reader, n int, last bool) error {
+	dst := filepath.Join(c.bookDir, md.Lpath)
+	if !strings.HasPrefix(filepath.Clean(dst), filepath.Clean(c.bookDir)+string(os.PathSeparator)) {
+		return fmt.Errorf("refusing lpath outside book dir: %q", md.Lpath)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	tmp := dst + ".part"
+	f, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	w, err := io.CopyN(f, r, int64(n))
+	f.Close()
+	if err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("receiving %s: got %d of %d bytes: %w", md.Lpath, w, n, err)
+	}
+	if err := os.Rename(tmp, dst); err != nil {
+		return err
+	}
+	md.Thumbnail = nil // don't bloat the state file; thumbnails go to system/thumbnails later
+	if i := c.find(md.Lpath); i >= 0 {
+		c.books[i] = md
+	} else {
+		c.books = append(c.books, md)
+	}
+	log.Printf("saved %s (%d bytes) last=%v", md.Lpath, n, last)
+	return c.save()
+}
+
+func (c *client) GetBook(id uc.BookID, pos int64) (io.ReadCloser, int64, error) {
+	f, err := os.Open(filepath.Join(c.bookDir, id.Lpath))
+	if err != nil {
+		return nil, 0, err
+	}
+	st, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, 0, err
+	}
+	if pos > 0 {
+		if _, err := f.Seek(pos, io.SeekStart); err != nil {
+			f.Close()
+			return nil, 0, err
+		}
+	}
+	return f, st.Size() - pos, nil
+}
+
+func (c *client) DeleteBook(id uc.BookID) error {
+	i := c.find(id.Lpath)
+	if err := os.Remove(filepath.Join(c.bookDir, id.Lpath)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if i >= 0 {
+		c.books = append(c.books[:i], c.books[i+1:]...)
+	}
+	log.Printf("deleted %s", id.Lpath)
+	return c.save()
+}
+
+func (c *client) UpdateStatus(s uc.Status, p int) { log.Printf("status %d progress %d", s, p) }
+
+func (c *client) LogPrintf(l uc.LogLevel, f string, a ...interface{}) {
+	log.Printf("[uc %d] "+f, append([]interface{}{l}, a...)...)
+}
+
+func (c *client) SetExitChannel(ch chan<- bool) { c.exitChan = ch }
+
+func main() {
+	dir := flag.String("dir", "/mnt/us/documents", "where received books are stored")
+	stateFile := flag.String("state", "", "metadata state file (default: <dir>/.calibre-wireless.json)")
+	name := flag.String("name", "Kindle", "device name shown in calibre")
+	debug := flag.Bool("debug", false, "verbose protocol log")
+	flag.Parse()
+	log.SetFlags(log.Ldate | log.Ltime)
+	log.Printf("calibre-wireless v%s starting, dir=%s", version, *dir)
+
+	c := &client{bookDir: *dir, stateFile: *stateFile, devName: *name}
+	if c.stateFile == "" {
+		c.stateFile = filepath.Join(*dir, ".calibre-wireless.json")
+	}
+	if err := c.load(); err != nil {
+		log.Fatalf("load state: %v", err)
+	}
+	conn, err := uc.New(c, *debug)
+	if err != nil {
+		if errors.Is(err, uc.CalibreNotFound) {
+			log.Printf("calibre not found on the network")
+			os.Exit(2)
+		}
+		log.Fatalf("connect: %v", err)
+	}
+	if err := conn.Start(); err != nil {
+		log.Fatalf("session ended with error: %v", err)
+	}
+	log.Printf("disconnected")
+}
