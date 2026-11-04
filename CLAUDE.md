@@ -71,6 +71,7 @@ calibre-debug test/calibre_server.py -- book1.azw3 book2.azw3 &   # headless cal
 - Auto-disconnect: 5 min after connecting with no book; 3 min idle after the last book (`totalBooks`); calibre eject ends immediately.
 - Prevent sleep while connected; if it sleeps anyway, reconnect after wake. Cover thumbnails are required.
 - Works with bgtsai/kindle-kual-firewall ≥ v1.9 (allows UDP to 255.255.255.255 on calibre's 5 broadcast ports). The INPUT-side UDP reply port is opened by this extension only while connected (like KOReader's `koreader.sh`).
+- Folder layout (decided 2026-11-05, not implemented yet): each received book goes in its own folder named after the book (same converted name as the file, per `filename_chinese`): `documents/<title>/<title> - <authors>.<ext>`. Books already on the device are not moved (the user deletes the single v0.4.0 test book himself).
 - Known risk: right after boot the Kindle may have no default route for minutes (knowledge base 32 §8); broadcast to 255.255.255.255 may fail → fall back to the wlan0 subnet broadcast address.
 
 ## Next step
