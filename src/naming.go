@@ -135,6 +135,26 @@ func (c *client) chineseName(md uc.CalibreBookMeta) string {
 	return sanitizeName(name)
 }
 
+// folderName is the per-book folder (decided 2026-11-05): the book title, converted and
+// sanitized like the file name, so documents/ holds one entry per book instead of the
+// book plus the .sdr folders the Kindle creates next to it.
+func (c *client) folderName(md uc.CalibreBookMeta) string {
+	t := strings.TrimSpace(md.Title)
+	if t == "" {
+		return ""
+	}
+	if c.conv != nil {
+		if out, err := c.conv.Convert(t); err == nil {
+			t = out
+		}
+	}
+	t = sanitizeName(t)
+	if t == "_" {
+		return ""
+	}
+	return t
+}
+
 // fileFor returns the on-device file name (relative to bookDir) for a calibre lpath.
 // Books from v0.2.0 and earlier have no entry and are stored under the lpath itself.
 func (c *client) fileFor(lpath string) string {
@@ -157,6 +177,10 @@ func (c *client) pickFile(md uc.CalibreBookMeta) string {
 	base := c.chineseName(md)
 	if base == "" || base == "_" {
 		return md.Lpath
+	}
+	// documents/<title>/<title> - <authors>.<ext>; books with no usable title stay at the top.
+	if dir := c.folderName(md); dir != "" {
+		base = dir + "/" + base
 	}
 	used := map[string]bool{}
 	for _, f := range c.files {

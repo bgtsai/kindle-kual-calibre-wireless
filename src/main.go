@@ -1,6 +1,7 @@
 // calibre-wireless — Kindle client for calibre's "wireless device connection"
 // (Smart Device App protocol), built on the UNCaGED library.
 //
+// v0.5.0: one folder per book (documents/<title>/<title> - <authors>.<ext>), .sdr cleanup on delete.
 // v0.4.0: discover calibre (subnet-broadcast fallback), receive / list / delete books,
 // Kindle home-screen cover thumbnails (+ amazon-cover-bug restore), device name shown
 // in calibre, Chinese file names (traditional / simplified / original,
@@ -30,7 +31,7 @@ import (
 	"github.com/shermp/UNCaGED/uc"
 )
 
-const version = "0.4.0"
+const version = "0.5.0"
 
 // client implements uc.Client. Metadata for every book calibre sent is kept in
 // one JSON file (stateFile) so calibre's "On device" column survives reconnects.
@@ -273,6 +274,7 @@ func (c *client) DeleteBook(id uc.BookID) error {
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	c.removeSidecars(path)
 	// Deleting books is activity too: restart the idle countdown instead of letting the
 	// "no book received" timer cut the user off while they are cleaning up the device.
 	c.idle.arm(afterBookTimeout, "idle after last book/delete")
@@ -282,6 +284,36 @@ func (c *client) DeleteBook(id uc.BookID) error {
 	delete(c.files, id.Lpath)
 	log.Printf("deleted %s (%s)", id.Lpath, filepath.Base(path))
 	return c.save()
+}
+
+// removeSidecars deletes the Kindle's reading-data folders for a deleted book
+// (<name>.sdr and <name>_<id>.sdr next to it; the Kindle made both for wireless books,
+// seen 2026-11-05) and then the per-book folder if nothing else is left in it.
+// Only exact-name matches: "X - A.sdr" must not take "X - A (2).sdr" with it.
+func (c *client) removeSidecars(bookPath string) {
+	dir := filepath.Dir(bookPath)
+	stem := strings.TrimSuffix(filepath.Base(bookPath), filepath.Ext(bookPath))
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range ents {
+		n := e.Name()
+		if !e.IsDir() || !strings.HasSuffix(n, ".sdr") {
+			continue
+		}
+		core := strings.TrimSuffix(n, ".sdr")
+		if core == stem || strings.HasPrefix(core, stem+"_") {
+			if err := os.RemoveAll(filepath.Join(dir, n)); err != nil {
+				log.Printf("remove %s: %v", n, err)
+			}
+		}
+	}
+	if filepath.Clean(dir) != filepath.Clean(c.bookDir) {
+		if err := os.Remove(dir); err == nil { // fails (and is kept) unless empty
+			log.Printf("removed empty folder %s", filepath.Base(dir))
+		}
+	}
 }
 
 func (c *client) UpdateStatus(s uc.Status, p int) {

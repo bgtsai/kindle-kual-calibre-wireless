@@ -4,7 +4,8 @@ KUAL extension (work in progress) that lets desktop calibre's **Connect/share �
 
 ## Status
 
-- v0.4.0: Go client + Kindle wrapper complete; **not yet run on a Kindle**. Cloud-tested: protocol against calibre 7.6 (`test/calibre_server.py`, incl. `--hold` for the timers), shell scripts under busybox sh with stubbed `lipc-*`/`iptables`/`eips` (normal end, connection loss ×3, user disconnect, Wi-Fi timeout, calibre not found).
+- v0.5.0: per-book folders, `.sdr` cleanup on delete, `preventScreenSaver` with `-i`. v0.4.0 ran on the user's Oasis 2 (2026-11-05): KUAL connect + book transfer OK; book button works after Hotfix install.
+- v0.4.0: Go client + Kindle wrapper complete. Cloud-tested: protocol against calibre 7.6 (`test/calibre_server.py`, incl. `--hold` for the timers), shell scripts under busybox sh with stubbed `lipc-*`/`iptables`/`eips` (normal end, connection loss ×3, user disconnect, Wi-Fi timeout, calibre not found).
 - Go client (`src/`): discovers calibre by UDP broadcast (falls back to subnet broadcast if 255.255.255.255 fails), receives books into `-dir`, keeps calibre's "On device" list in `<dir>/.calibre-wireless.json`, delete, Kindle home thumbnails like calibre's KINDLE2 driver (`system/thumbnails/thumbnail_{EXTH113}_{EXTH501}_portrait.jpg`, height 500; copies in `amazon-cover-bug/`, restored on connect), Chinese file names per `filename_chinese` (OpenCC s2tw/tw2s, lpath→file map in the state file), auto-disconnect timers (`idle.go`). Exit codes: 0 = normal end (eject, timer, our TERM), 2 = calibre not found, 1 = error/connection lost.
 - Log lines `bin/session.sh` matches — keep in sync with `main.go`: `connected to calibre`, `book <n>/<N> received`, `auto-disconnect`.
 - UNCaGED v0.7.3 is vendored in `src/third_party/UNCaGED` (`replace` in go.mod) with two patches marked "kindle-kual-calibre-wireless patch": `BookProgresser` (thisBook/totalBooks before each SaveBook) and the subnet-broadcast fallback in `calibre/calibre.go`. UNCaGED only sends status `Connected` on GET_DEVICE_INFORMATION, which calibre 7.6 never sends → the client treats the first Idle/Waiting as "connected".
@@ -33,14 +34,14 @@ kindle/                          = Kindle drive root; the Release zip is its con
 
 | Part | Where | What to check |
 | --- | --- | --- |
-| Sleep prevention `lipc-set-prop com.lab126.powerd preventScreenSaver 1/0` | `session.sh` `sleep_block` | **unverified on 5.13.5.** `powerd properties`: property exists and is writable; log shows `preventScreenSaver=1 ok`. |
+| Sleep prevention `lipc-set-prop -i com.lab126.powerd preventScreenSaver 1/0` | `session.sh` `sleep_block` | Needs `-i` (integer property; v0.4.0 missed it). Same command as Helper+'s `ssprevent.sh` on the user's 5.13.5 Oasis 2, so the property exists; the log should show `preventScreenSaver=1 ok`. |
 | Library rescan `lipc-set-prop com.lab126.scanner doFullScan 1` | `session.sh` `cleanup` | **unverified.** `scanner properties`; do new books appear on the home screen without it? |
 | Reconnect after sleep | `session.sh` main loop | No wake event used: after rc 1 it waits for Wi-Fi again (count-based, survives suspend). `diagnose_events.txt` shows the powerd sleep/wake event names if a dedicated wake trigger is ever needed. |
 | Airplane mode `wirelessEnable` 0/1, `cmState` CONNECTED | `session.sh` | Verified on 5.13.5 (KB 32 §7). |
 | INPUT rule for calibre's reply | `session.sh` `input_open/close` | `iptables -L INPUT`: rules `udp spt:<port>` present only while connected. calibre answers from its broadcast port (driver.py BROADCAST_PORTS). |
 | `eips` messages, `mkfifo` | `common.sh` `notify`, `session.sh` | `tools`. eips draws ASCII only → messages are English. |
 | KUAL `"refresh": true` / CJK menu labels | `common.sh` `render_menu` | **unverified**: does the label change right after tapping, and do Chinese labels render? Otherwise it updates when the menu is reopened. |
-| Scriptlet header (`# Name:`, `# DontUseFBInk`, no `# Icon:`) | `kindle/documents/Calibre 連線.sh` | Book appears in the library and tapping it runs toggle.sh. |
+| Scriptlet header (`# Name:`, `# DontUseFBInk`, no `# Icon:`) | `kindle/documents/Calibre 連線.sh` | Needs KindleModding Universal Hotfix (sh_integration). On the user's device it appeared only after installing Hotfix 2.5.0 (2026-11-05). Install tip that worked: copy `Update_hotfix_universal.bin` without the `.bin` extension, rename it on the Kindle drive, then Settings ▸ Update Your Kindle (otherwise the Kindle grabs the file mid-copy, renames it `update-<target>-<uuid>.bin`, and the update errors). MRPI cannot install Hotfix 2.x (its progress bar calls `/var/local/kmc/<arch>/bin/fbink`, which doesn't exist yet → rc 127). |
 | Default route missing after boot | UNCaGED patch | `routes` section; log line `falling back to subnet broadcast`. |
 
 Tested device (cloud only so far): Kindle Oasis 2, firmware 5.13.5, kernel 4.1.15-lab126, KUAL + Universal Hotfix, kindle-kual-firewall v1.15.
@@ -71,7 +72,7 @@ calibre-debug test/calibre_server.py -- book1.azw3 book2.azw3 &   # headless cal
 - Auto-disconnect: 5 min after connecting with no book; 3 min idle after the last book (`totalBooks`); calibre eject ends immediately.
 - Prevent sleep while connected; if it sleeps anyway, reconnect after wake. Cover thumbnails are required.
 - Works with bgtsai/kindle-kual-firewall ≥ v1.9 (allows UDP to 255.255.255.255 on calibre's 5 broadcast ports). The INPUT-side UDP reply port is opened by this extension only while connected (like KOReader's `koreader.sh`).
-- Folder layout (decided 2026-11-05, not implemented yet): each received book goes in its own folder named after the book (same converted name as the file, per `filename_chinese`): `documents/<title>/<title> - <authors>.<ext>`. Books already on the device are not moved (the user deletes the single v0.4.0 test book himself).
+- Folder layout (decided 2026-11-05, v0.5.0): each received book goes in its own folder named after the book title (converted per `filename_chinese`, sanitized like file names): `documents/<title>/<title> - <authors>.<ext>`. Books already on the device are not moved. Deleting a book also removes its Kindle `.sdr` folders (`<name>.sdr`, `<name>_<id>.sdr`, exact-name match) and the book folder if it is then empty.
 - Known risk: right after boot the Kindle may have no default route for minutes (knowledge base 32 §8); broadcast to 255.255.255.255 may fail → fall back to the wlan0 subnet broadcast address.
 
 ## Next step

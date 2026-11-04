@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless session.sh v0.4.0
+# calibre-wireless session.sh v0.5.0
 # 一次連線階段，由 toggle.sh 在背景啟動（單一實例：toggle.sh 寫 $PIDFILE）。
 #   解除飛行模式 → 等 Wi-Fi 連上（最多 WIFI_WAIT_S）→ 開 INPUT 讓 calibre 的廣播回覆進來
 #   → 防休眠 → 跑 Go client → 結束（任何原因）一律：恢復休眠、關 INPUT、回飛行模式、掃描書庫。
@@ -42,9 +42,10 @@ input_close() {
     done
 }
 
-# 防休眠。com.lab126.powerd preventScreenSaver 在 5.13.5 上尚未實機驗證：結果照實寫進 log
+# 防休眠。-i：preventScreenSaver 是整數屬性，不加 -i 會被當字串而設定失敗
+# （寫法同使用者機上 Helper+ 的 ssprevent.sh；v0.4.0 漏了 -i）。結果照實寫進 log
 sleep_block() {
-    if lipc-set-prop com.lab126.powerd preventScreenSaver "$1" 2>>"$LOG"; then
+    if lipc-set-prop -i com.lab126.powerd preventScreenSaver "$1" 2>>"$LOG"; then
         log "preventScreenSaver=$1 ok" "防休眠設定 $1 成功"
     else
         log "WARN: preventScreenSaver=$1 failed" "警告：防休眠設定 $1 失敗"

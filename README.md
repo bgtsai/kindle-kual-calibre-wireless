@@ -5,12 +5,13 @@
 A KUAL extension for jailbroken Kindles. In desktop calibre, **Connect/share → Start wireless device connection** then finds your Kindle over Wi-Fi, and you send and delete books just like with a USB cable — no KOReader needed, books open in the Kindle's own reader.
 
 - Kindle home-screen cover thumbnails, written the same way calibre's USB driver does
+- One folder per book: `documents/<title>/<title> - <authors>.<ext>`, so the Kindle's `.sdr` folders stay inside it; deleting a book in calibre removes its folder too
 - Chinese file names: calibre always transliterates file names to pinyin; this extension saves books as `<title> - <authors>` in Traditional Chinese, Simplified Chinese, or exactly as in calibre (your choice)
 - Airplane mode handled for you: Wi-Fi turns on when you connect and back off when the session ends
 - Ends by itself: 5 minutes after connecting if no book arrives, 3 minutes after the last book, or immediately when you eject in calibre
 - The Kindle doesn't fall asleep while connected; if it does anyway, it reconnects after waking
 
-> **Status:** v0.4.0. The protocol, timers and file naming are tested against calibre 7.6 in the cloud; **not yet tested on a real Kindle.** Built for Kindle Oasis 2, firmware 5.13.5. Other models may need adjustments — see [Customizing for your Kindle with AI](#customizing-for-your-kindle-with-ai).
+> **Status:** v0.5.0. The protocol, timers and file naming are tested against calibre 7.6 in the cloud; **not yet tested on a real Kindle.** Built for Kindle Oasis 2, firmware 5.13.5. Other models may need adjustments — see [Customizing for your Kindle with AI](#customizing-for-your-kindle-with-ai).
 
 ## Requirements
 
