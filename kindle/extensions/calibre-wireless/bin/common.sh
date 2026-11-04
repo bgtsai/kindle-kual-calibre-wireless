@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless common.sh v0.7.0 — 各腳本共用的路徑與函式
+# calibre-wireless common.sh v0.7.1 — 各腳本共用的路徑與函式
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$BASE/calibre-wireless.conf"
@@ -28,28 +28,45 @@ log() {
 # 要等介面下次重畫才會回來——沒有查到「只重畫、不切換畫面」的指令（KB 32 第 10 節）。
 # 第 2 個參數是第幾列，從底部算：1＝最底下一列（狀態），2＝它上面一列（進度）。
 # 優先用 FBInk（Universal Hotfix 會裝，支援負數列號＝從底部算、-r 右邊補空白蓋掉舊字）。
-# FBInk 執行失敗（v0.6.0 實機：畫面上什麼都沒有，錯誤又被丟掉）→ 把錯誤寫進 log 一次、
-# 留下 FBINK_FAILED 標記，之後這次開機都改用 eips，不再靜默失敗。
+# 選 FBInk 要看架構（v0.7.0 實機）：Hotfix 同時裝了 armhf 與 armel 兩份，Oasis 2（5.13.5）是 armel，
+# armhf 版在它上面「檔案在卻 not found」（rc 127，缺 armhf 的載入程式）。所以有
+# /lib/ld-linux-armhf.so.3 才先試 armhf，每個候選先跑一次 -h，rc 126／127 的跳過。
+# 畫字時還是失敗 → 錯誤寫進 log、把「那個檔」記進 FBINK_FAILED（只略過它，不連帶停用其他份），
+# 這次改用 eips（v0.6.0 實機：失敗被丟掉、又不退回 eips，畫面全空）。
 # eips 不能用負數列號，底部列號＝螢幕高（eips -i 的 yres）÷ EIPS_ROW_PX − EIPS_BOTTOM_MARGIN。
-# EIPS_ROW_PX 是估計值（Oasis 2 的 eips 字高未實測；Diagnose 會畫列號標記給使用者拍照校正）；
-# 算出來的列 eips 拒畫（超出畫面）就退回頂端第 2、3 列（v0.5.0 的位置）。
+# EIPS_ROW_PX＝24：v0.7.0 實機照片，第 41 列落在 1680 高畫面的約 60%（41×24≈984），
+# 字寬約 16（長訊息在約 79 字截斷，1264÷16）。eips 對超出畫面的列號不報錯（row 80 也回 ok），
+# 所以不能靠「被拒畫」判斷；讀不到 yres 時才畫在頂端第 2、3 列。
 NOTIFY_SLOTS="1 2"
 # 結束訊息停留幾秒再擦掉 (s)，讓使用者看得到最後一句
 NOTIFY_CLEAR_DELAY_S=4
 # eips 一列的高度 (px)，估計值，見上方說明
-EIPS_ROW_PX=40
+EIPS_ROW_PX=24
 # eips 底部留幾列不畫（最底下那列可能被裁掉）
 EIPS_BOTTOM_MARGIN=1
 FBINK_FAILED="/tmp/calibre-wireless.fbink-failed"
 
+fbink_candidates() {
+    if [ -e /lib/ld-linux-armhf.so.3 ]; then
+        echo /var/local/kmc/armhf/bin/fbink /var/local/kmc/armel/bin/fbink
+    else
+        echo /var/local/kmc/armel/bin/fbink /var/local/kmc/armhf/bin/fbink
+    fi
+    echo /mnt/us/libkh/bin/fbink "$(which fbink 2>/dev/null)"
+}
+
 find_fbink() {
-    for f in /var/local/kmc/armhf/bin/fbink /var/local/kmc/armel/bin/fbink /mnt/us/libkh/bin/fbink "$(which fbink 2>/dev/null)"; do
-        [ -n "$f" ] && [ -x "$f" ] && { echo "$f"; return 0; }
+    for f in $(fbink_candidates); do
+        if [ -z "$f" ] || [ ! -x "$f" ]; then continue; fi
+        grep -qxF "$f" "$FBINK_FAILED" 2>/dev/null && continue
+        "$f" -h >/dev/null 2>&1
+        case $? in 126|127) continue ;; esac
+        echo "$f"
+        return 0
     done
     return 1
 }
-FBINK=""
-[ -f "$FBINK_FAILED" ] || FBINK="$(find_fbink)"
+FBINK="$(find_fbink)"
 
 # eips 的總列數（讀不到就空字串）
 eips_rows() {
@@ -66,10 +83,11 @@ eips_line() {
         r="$(eips_rows)"
         if [ -n "$r" ] && [ "$r" -gt 4 ]; then EIPS_BOTTOM=$((r - EIPS_BOTTOM_MARGIN)); else EIPS_BOTTOM=0; fi
     fi
-    if [ "$EIPS_BOTTOM" -gt 0 ] && eips 0 "$((EIPS_BOTTOM - $1 + 1))" "$2" >/dev/null 2>&1; then
-        return 0
+    if [ "$EIPS_BOTTOM" -gt 0 ]; then
+        eips 0 "$((EIPS_BOTTOM - $1 + 1))" "$2" >/dev/null 2>&1
+    else
+        eips 0 "$(($1 + 1))" "$2" >/dev/null 2>&1
     fi
-    eips 0 "$(($1 + 1))" "$2" >/dev/null 2>&1
 }
 
 # 畫一列（slot 從底部算）；$2 是要畫的完整字串
@@ -79,8 +97,9 @@ draw_line() {
         rc=$?
         [ "$rc" = 0 ] && return 0
         log "WARN: fbink failed (rc=$rc, $FBINK): $err - using eips" "警告：fbink 執行失敗，改用 eips（原因見上一行）"
-        : > "$FBINK_FAILED"
-        FBINK=""
+        echo "$FBINK" >> "$FBINK_FAILED"
+        FBINK="$(find_fbink)"
+        [ -n "$FBINK" ] && { draw_line "$1" "$2"; return; }
     fi
     eips_line "$1" "$2"
 }

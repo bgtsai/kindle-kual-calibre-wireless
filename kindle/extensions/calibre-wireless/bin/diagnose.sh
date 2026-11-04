@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless diagnose.sh v0.7.0 — 唯讀，不改任何設定
+# calibre-wireless diagnose.sh v0.7.1 — 唯讀，不改任何設定
 # 結果寫到使用者區（USB 拿得到）：
 #   extensions/calibre-wireless/diagnose.txt         一次性的系統資訊
 #   extensions/calibre-wireless/diagnose_events.txt  按下後 EVENT_RECORD_S 秒內的 powerd／wifid／cmd 事件
@@ -18,7 +18,7 @@ POLL_S=3
 section() { echo; echo "===== $1 ====="; }
 
 {
-    echo "calibre-wireless diagnose v0.4.0  $(date)"
+    echo "calibre-wireless diagnose v0.7.1  $(date)"
 
     section "firmware / kernel"
     cat /etc/prettyversion.txt 2>&1
@@ -46,20 +46,16 @@ section() { echo; echo "===== $1 ====="; }
     for f in /var/local/kmc/armhf/bin/fbink /var/local/kmc/armel/bin/fbink /mnt/us/libkh/bin/fbink; do
         printf '%s: ' "$f"; ls -l "$f" 2>&1
     done
-    f="$(find_fbink)"
-    if [ -n "$f" ]; then
-        echo "--- $f -q -y -1 -r 'fbink test (bottom)'"
-        "$f" -q -y -1 -r "fbink test (bottom)" 2>&1; echo "rc=$?"
-        echo "--- $f -h (first lines)"
-        "$f" -h 2>&1 | head -n 15
-    fi
+    echo "arch: $([ -e /lib/ld-linux-armhf.so.3 ] && echo armhf || echo armel)  candidates: $(fbink_candidates)"
+    for f in $(fbink_candidates); do
+        [ -x "$f" ] || continue
+        echo "--- $f -q -y -1 -r 'fbink test $f'"
+        "$f" -q -y -1 -r "fbink test $f" 2>&1; echo "rc=$?"
+    done
+    echo "chosen FBINK: $(find_fbink)"
     echo "--- eips -i"
     eips -i 2>&1
     echo "eips_rows (yres / EIPS_ROW_PX=$EIPS_ROW_PX): $(eips_rows)"
-    # 列號標記：在右半邊每 5 列畫一個「rN」，使用者拍照就知道 eips 一列多高、最底能畫到第幾列
-    for r in 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80; do
-        eips 30 "$r" "r$r" >/dev/null 2>&1 && echo "eips row $r: ok" || echo "eips row $r: rejected"
-    done
 
     section "wireless state"
     printf 'com.lab126.cmd wirelessEnable: '; lipc-get-prop com.lab126.cmd wirelessEnable 2>&1
@@ -115,4 +111,9 @@ section() { echo; echo "===== $1 ====="; }
     notify_brief "calibre-wireless: events recorded"
 ) </dev/null >/dev/null 2>&1 &
 
+# 列號標記放在最後才畫：KUAL 關閉時書庫會重畫，太早畫會被蓋掉（v0.7.0 實機）
+# 右半邊每 5 列一個「rN」，使用者拍照就知道 eips 一列多高、最底能畫到第幾列
+for r in 5 10 15 20 25 30 35 40 45 50 55 60 65 70; do
+    eips 50 "$r" "r$r" >/dev/null 2>&1
+done
 notify "diagnose.txt written - photo the screen, then sleep/wake + toggle Wi-Fi (2 min)"
