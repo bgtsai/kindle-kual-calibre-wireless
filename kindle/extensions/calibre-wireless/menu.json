@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "name": "Calibre Wireless",
+      "priority": 1,
+      "items": [
+        { "name": "連線到 calibre", "priority": 1, "action": "./bin/toggle.sh", "exitmenu": false, "refresh": true },
+        { "name": "檔名：繁體", "priority": 2, "action": "./bin/filename_toggle.sh", "exitmenu": false, "refresh": true },
+        { "name": "Diagnose (write diagnose.txt)", "priority": 3, "action": "./bin/diagnose.sh" }
+      ]
+    }
+  ]
+}
