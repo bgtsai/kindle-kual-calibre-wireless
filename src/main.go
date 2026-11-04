@@ -1,6 +1,7 @@
 // calibre-wireless — Kindle client for calibre's "wireless device connection"
 // (Smart Device App protocol), built on the UNCaGED library.
 //
+// v0.7.0: also lists books sent over USB (metadata.calibre), deleting them updates that file.
 // v0.6.0: keep searching for calibre up to 5 min (-search-timeout).
 // v0.5.0: one folder per book (documents/<title>/<title> - <authors>.<ext>), .sdr cleanup on delete.
 // v0.4.0: discover calibre (subnet-broadcast fallback), receive / list / delete books,
@@ -32,7 +33,7 @@ import (
 	"github.com/shermp/UNCaGED/uc"
 )
 
-const version = "0.6.0"
+const version = "0.7.0"
 
 // client implements uc.Client. Metadata for every book calibre sent is kept in
 // one JSON file (stateFile) so calibre's "On device" column survives reconnects.
@@ -51,7 +52,9 @@ type client struct {
 	idle          *idleTimer
 	bookNo        int // 1-based number of the book being received (calibre's thisBook+1)
 	bookTotal     int
-	sessionUp     bool // "connected to calibre" logged, no-book timer armed
+	sessionUp     bool              // "connected to calibre" logged, no-book timer armed
+	usbCacheFile  string            // calibre USB driver's metadata.calibre (usbcache.go)
+	usb           map[string]string // lpath (ours) → lpath in metadata.calibre, for books sent over USB
 }
 
 type state struct {
@@ -95,7 +98,7 @@ func (c *client) load() error {
 
 // save writes to a temp file then renames, so a crash mid-write can't corrupt the list.
 func (c *client) save() error {
-	b, err := json.Marshal(state{Books: c.books, Files: c.files, DevInfo: c.devInfo})
+	b, err := json.Marshal(state{Books: c.ownBooks(), Files: c.files, DevInfo: c.devInfo})
 	if err != nil {
 		return err
 	}
@@ -276,6 +279,7 @@ func (c *client) DeleteBook(id uc.BookID) error {
 		return err
 	}
 	c.removeSidecars(path)
+	c.forgetUSBBook(id.Lpath)
 	// Deleting books is activity too: restart the idle countdown instead of letting the
 	// "no book received" timer cut the user off while they are cleaning up the device.
 	c.idle.arm(afterBookTimeout, "idle after last book/delete")
@@ -395,6 +399,7 @@ func main() {
 	coverCache := flag.String("cover-cache", "/mnt/us/amazon-cover-bug", "thumbnail backup dir (same as calibre's USB driver)")
 	confFile := flag.String("conf", "", "settings file (default: calibre-wireless.conf next to the program's bin/ dir)")
 	debug := flag.Bool("debug", false, "verbose protocol log")
+	usbCache := flag.String("usb-metadata", "", "calibre USB driver's book list (default: metadata.calibre one level above -dir; \"none\" = ignore)")
 	flag.DurationVar(&searchTimeout, "search-timeout", searchTimeout, "keep looking for calibre this long (users often tap connect first, then start calibre)")
 	flag.DurationVar(&noBookTimeout, "no-book-timeout", noBookTimeout, "disconnect if no book arrives this long after connecting (0 = never)")
 	flag.DurationVar(&afterBookTimeout, "idle-timeout", afterBookTimeout, "disconnect this long after the last book or delete (0 = never)")
@@ -418,6 +423,14 @@ func main() {
 	if err := c.load(); err != nil {
 		log.Fatalf("load state: %v", err)
 	}
+	switch *usbCache {
+	case "":
+		c.usbCacheFile = filepath.Join(filepath.Dir(filepath.Clean(*dir)), "metadata.calibre")
+	case "none":
+	default:
+		c.usbCacheFile = *usbCache
+	}
+	c.loadUSBCache()
 	// calibre shows "Wireless device: <deviceName>"; UNCaGED takes the name from DevInfo,
 	// which is empty until calibre has set it once (v0.1.0 showed only "Wireless device").
 	if c.devInfo.DevInfo.DeviceName == "" {

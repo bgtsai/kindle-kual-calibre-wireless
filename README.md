@@ -10,6 +10,7 @@ A KUAL extension for jailbroken Kindles. In desktop calibre, **Connect/share →
 - **Airplane mode handled for you**: Wi-Fi turns on when you connect and back off when the session ends
 - **Ends by itself**: 5 minutes after connecting if no book arrives, 3 minutes after the last book, or immediately when you eject in calibre
 - **No sleep while connected**; if the Kindle sleeps anyway, it reconnects after waking
+- **Books sent over USB show up too**: calibre's device view lists them (from the `metadata.calibre` file calibre's USB driver keeps on the Kindle), and deleting one over Wi-Fi also removes it from that file
 - **Two ways to start**: a KUAL menu item, or a "book" in your library you tap (needs the Universal Hotfix, see [Requirements](#requirements))
 
 > **Tested on:** Kindle Oasis 2, firmware 5.13.5 (kernel 4.1.15), with calibre 7.6 — connecting from KUAL, receiving books, and the library book button. Other models may need adjustments — see [Customizing for your Kindle with AI](#customizing-for-your-kindle-with-ai).
@@ -122,6 +123,7 @@ Waiting times count only while the Kindle is awake: time spent asleep doesn't us
 | --- | --- | --- |
 | `calibre-wireless.log` | `extensions/calibre-wireless/` | One entry per step of every session. Trimmed automatically past about 200 KB. |
 | `calibre-wireless.conf` | `extensions/calibre-wireless/` | Settings (`filename_chinese=traditional/simplified/original`). Comes in the zip; the menu rewrites it. |
+| `metadata.calibre` | drive root | Not created by this extension — calibre's USB driver writes it. Read to list books sent over USB; the entry of a book you delete over Wi-Fi is removed. Books copied to the Kindle without calibre are in neither list and don't show up. |
 | `.calibre-wireless.json` | `documents/` | Which books calibre sent and their file names, so calibre's "On device" column survives reconnects. Hidden file. |
 | `thumbnail_*_portrait.jpg` | `system/thumbnails/` | Home-screen covers. Backup copies in `amazon-cover-bug/` are put back on every connect if the Kindle deleted them. |
 | `diagnose.txt`, `diagnose_events.txt` | `extensions/calibre-wireless/` | Output of **Diagnose**. |
@@ -151,7 +153,7 @@ Lines with `-` in the date come from the shell scripts and are written twice: En
 ## Known limitations
 
 - **The on-screen messages are English**: they are drawn directly on the screen (FBInk, or `eips` without the Universal Hotfix), which only does ASCII here.
-- **Wiped messages leave a blank line until the Kindle redraws**: the messages replace screen pixels the Kindle's own interface doesn't know about. They are wiped at the end, but whatever the interface showed in those lines (e.g. the reading progress line) only comes back when it redraws (turning a page, opening a book). No command was found that makes the interface redraw without switching screens. Without the Universal Hotfix (no FBInk), messages are shown near the top instead, because `eips` can't count rows from the bottom.
+- **Wiped messages leave a blank line until the Kindle redraws**: the messages replace screen pixels the Kindle's own interface doesn't know about. They are wiped at the end, but whatever the interface showed in those lines (e.g. the reading progress line) only comes back when it redraws (turning a page, opening a book). No command was found that makes the interface redraw without switching screens. Messages are drawn with FBInk (comes with the Universal Hotfix); if FBInk is missing or fails, `eips` draws them near the bottom instead (its row height is estimated, so the exact position may differ), or at the top if that row is rejected. An FBInk failure is written to the log once (`WARN: fbink failed`).
 - **The Kindle's clock** may be wrong if it is always in airplane mode (it never syncs), so log times can be off. Transfers are not affected.
 - **KFX files**: no home-screen thumbnail yet.
 - **Settings reset on update**: copying a new zip overwrites `calibre-wireless.conf`.

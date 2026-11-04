@@ -10,6 +10,7 @@
 - **自動處理飛行模式**：按連線時開 Wi-Fi，結束後回到飛行模式
 - **會自己結束**：連上後 5 分鐘沒傳書、最後一本傳完 3 分鐘、或在 calibre 按「退出」時
 - **連線中不休眠**；萬一休眠了，喚醒後自動重連
+- **USB 傳的書也看得到**：calibre 的裝置清單會列出它們（讀 calibre USB 驅動留在 Kindle 上的 `metadata.calibre`），從無線刪掉時也會同步移除那份紀錄
 - **兩種啟動方式**：KUAL 選單，或點書庫裡的一本「書」（需要 Universal Hotfix，見[需要的東西](#需要的東西)）
 
 > **實測機型：** Kindle Oasis 2、韌體 5.13.5（核心 4.1.15），搭配 calibre 7.6——KUAL 連線、收書、書庫書本按鈕都測過。其他機型可能要調整，見[請 AI 幫你改成適合你的 Kindle](#請-ai-幫你改成適合你的-kindle)。
@@ -122,6 +123,7 @@ Calibre Wireless ▸
 | --- | --- | --- |
 | `calibre-wireless.log` | `extensions/calibre-wireless/` | 每次連線的每一步。超過約 200 KB 會自動裁短。 |
 | `calibre-wireless.conf` | `extensions/calibre-wireless/` | 設定（`filename_chinese=traditional/simplified/original`）。在 zip 裡，選單會改寫它。 |
+| `metadata.calibre` | 磁碟根目錄 | 不是這個插件建的，是 calibre 的 USB 驅動寫的。讀它來列出 USB 傳的書；從無線刪掉的書會移除那一筆。不是透過 calibre 放進 Kindle 的書，兩份清單都沒有，不會出現。 |
 | `.calibre-wireless.json` | `documents/` | calibre 傳過哪些書、各自的檔名，讓 calibre 的「在裝置上」欄位重連後還在。隱藏檔。 |
 | `thumbnail_*_portrait.jpg` | `system/thumbnails/` | 首頁封面。備份在 `amazon-cover-bug/`，Kindle 刪掉的話每次連線會補回來。 |
 | `diagnose.txt`、`diagnose_events.txt` | `extensions/calibre-wireless/` | **Diagnose** 的結果。 |
@@ -151,7 +153,7 @@ Calibre Wireless ▸
 ## 已知限制
 
 - **畫面訊息是英文**：訊息是直接畫在螢幕上的（FBInk，沒裝 Universal Hotfix 時用 `eips`），這裡只能畫 ASCII。
-- **擦掉後會留一條空白，等 Kindle 重畫才恢復**：訊息改的是螢幕像素，Kindle 介面不知道。結束時會擦掉，但那幾列原本的介面內容（例如閱讀進度那一行）要等介面重畫（翻頁、開書）才會回來。沒有查到能讓介面「只重畫、不切換畫面」的指令。沒裝 Universal Hotfix（沒有 FBInk）時，訊息改顯示在靠近頂端的位置，因為 `eips` 不能從底部算列數。
+- **擦掉後會留一條空白，等 Kindle 重畫才恢復**：訊息改的是螢幕像素，Kindle 介面不知道。結束時會擦掉，但那幾列原本的介面內容（例如閱讀進度那一行）要等介面重畫（翻頁、開書）才會回來。沒有查到能讓介面「只重畫、不切換畫面」的指令。訊息用 FBInk 畫（Universal Hotfix 附帶）；FBInk 不存在或執行失敗時，改用 `eips` 畫在靠近底部的位置（它的列高是估計值，位置可能略有不同），那一列被拒畫就畫在頂端。FBInk 失敗會在 log 記一次（`WARN: fbink failed`）。
 - **Kindle 的時鐘**如果長期在飛行模式、從不對時，可能是錯的，所以 log 的時間會不準。傳書不受影響。
 - **KFX 檔**還沒有首頁縮圖。
 - **更新會重設設定**：蓋過新 zip 會覆蓋 `calibre-wireless.conf`。

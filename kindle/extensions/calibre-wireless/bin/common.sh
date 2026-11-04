@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless common.sh v0.6.0 — 各腳本共用的路徑與函式
+# calibre-wireless common.sh v0.7.0 — 各腳本共用的路徑與函式
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$BASE/calibre-wireless.conf"
@@ -27,11 +27,20 @@ log() {
 # 要等介面因為開書等動作重畫才被蓋掉。擦掉＝用空白（白底）蓋回去；原本那一列的介面內容
 # 要等介面下次重畫才會回來——沒有查到「只重畫、不切換畫面」的指令（KB 32 第 10 節）。
 # 第 2 個參數是第幾列，從底部算：1＝最底下一列（狀態），2＝它上面一列（進度）。
-# 優先用 FBInk（Universal Hotfix 會裝，支援負數列號＝從底部算、-r 右邊補空白蓋掉舊字）；
-# 沒有 FBInk 就退回 eips，eips 不能從底部算，只好畫在頂端第 2、3 列（v0.5.0 的位置）。
+# 優先用 FBInk（Universal Hotfix 會裝，支援負數列號＝從底部算、-r 右邊補空白蓋掉舊字）。
+# FBInk 執行失敗（v0.6.0 實機：畫面上什麼都沒有，錯誤又被丟掉）→ 把錯誤寫進 log 一次、
+# 留下 FBINK_FAILED 標記，之後這次開機都改用 eips，不再靜默失敗。
+# eips 不能用負數列號，底部列號＝螢幕高（eips -i 的 yres）÷ EIPS_ROW_PX − EIPS_BOTTOM_MARGIN。
+# EIPS_ROW_PX 是估計值（Oasis 2 的 eips 字高未實測；Diagnose 會畫列號標記給使用者拍照校正）；
+# 算出來的列 eips 拒畫（超出畫面）就退回頂端第 2、3 列（v0.5.0 的位置）。
 NOTIFY_SLOTS="1 2"
 # 結束訊息停留幾秒再擦掉 (s)，讓使用者看得到最後一句
 NOTIFY_CLEAR_DELAY_S=4
+# eips 一列的高度 (px)，估計值，見上方說明
+EIPS_ROW_PX=40
+# eips 底部留幾列不畫（最底下那列可能被裁掉）
+EIPS_BOTTOM_MARGIN=1
+FBINK_FAILED="/tmp/calibre-wireless.fbink-failed"
 
 find_fbink() {
     for f in /var/local/kmc/armhf/bin/fbink /var/local/kmc/armel/bin/fbink /mnt/us/libkh/bin/fbink "$(which fbink 2>/dev/null)"; do
@@ -39,25 +48,52 @@ find_fbink() {
     done
     return 1
 }
-FBINK="$(find_fbink)"
+FBINK=""
+[ -f "$FBINK_FAILED" ] || FBINK="$(find_fbink)"
+
+# eips 的總列數（讀不到就空字串）
+eips_rows() {
+    yres="$(eips -i 2>/dev/null | awk '/yres:/ { for (i = 1; i <= NF; i++) if ($i == "yres:") { print $(i + 1); exit } }')"
+    case "$yres" in ''|*[!0-9]*) return 1 ;; esac
+    echo $((yres / EIPS_ROW_PX))
+}
+EIPS_BOTTOM=""
+
+# 用 eips 畫一列；slot 從底部算。底部算不出來或被拒畫就畫在頂端
+eips_line() {
+    which eips >/dev/null 2>&1 || return 1
+    if [ -z "$EIPS_BOTTOM" ]; then
+        r="$(eips_rows)"
+        if [ -n "$r" ] && [ "$r" -gt 4 ]; then EIPS_BOTTOM=$((r - EIPS_BOTTOM_MARGIN)); else EIPS_BOTTOM=0; fi
+    fi
+    if [ "$EIPS_BOTTOM" -gt 0 ] && eips 0 "$((EIPS_BOTTOM - $1 + 1))" "$2" >/dev/null 2>&1; then
+        return 0
+    fi
+    eips 0 "$(($1 + 1))" "$2" >/dev/null 2>&1
+}
+
+# 畫一列（slot 從底部算）；$2 是要畫的完整字串
+draw_line() {
+    if [ -n "$FBINK" ]; then
+        err="$("$FBINK" -q -y "-$1" -r "$2" 2>&1)"
+        rc=$?
+        [ "$rc" = 0 ] && return 0
+        log "WARN: fbink failed (rc=$rc, $FBINK): $err - using eips" "警告：fbink 執行失敗，改用 eips（原因見上一行）"
+        : > "$FBINK_FAILED"
+        FBINK=""
+    fi
+    eips_line "$1" "$2"
+}
 
 notify() {
-    slot="${2:-1}"
-    if [ -n "$FBINK" ]; then
-        "$FBINK" -q -y "-$slot" -r "$1" >/dev/null 2>&1
-    elif which eips >/dev/null 2>&1; then
-        eips 2 "$((slot + 1))" "$1                              " >/dev/null 2>&1
-    fi
+    # 右邊補空白：蓋掉上一句較長的字（eips 不會自己補）
+    draw_line "${2:-1}" "  $1                                        "
 }
 
 # 擦掉所有提示列
 clear_notify() {
     for slot in $NOTIFY_SLOTS; do
-        if [ -n "$FBINK" ]; then
-            "$FBINK" -q -y "-$slot" -r " " >/dev/null 2>&1
-        elif which eips >/dev/null 2>&1; then
-            eips 0 "$((slot + 1))" "                                                  " >/dev/null 2>&1
-        fi
+        draw_line "$slot" "                                                            "
     done
 }
 
