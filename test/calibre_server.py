@@ -32,6 +32,15 @@ for f in files:
     with open(f, 'rb') as s:
         mi = get_metadata(s, os.path.splitext(f)[1][1:])
     mi.uuid = 'uuid-' + os.path.basename(f)
+    # The GUI fills mi.thumbnail from the library cover; emulate it from the file's embedded cover.
+    # Prefer a full-size sidecar cover (<book>.jpg) like the GUI's library cover; the
+    # cover embedded in an azw3 may be only the small EXTH thumbnail.
+    cover = open(f + '.jpg', 'rb').read() if os.path.exists(f + '.jpg') else (mi.cover_data[1] if mi.cover_data else None)
+    if cover:
+        from calibre.utils.img import scale_image
+        # scale_image's width defaults to 60; make height the only limit (as the GUI does)
+        w, h, data = scale_image(cover, width=10000, height=d.THUMBNAIL_HEIGHT)
+        mi.thumbnail = (w, h, data)
     mds.append(mi); names.append(os.path.basename(f))
 locs = d.upload_books(files, names, metadata=mds) if files else []
 print('UPLOADED:', locs, flush=True)
@@ -39,7 +48,7 @@ d.add_books_to_metadata(locs, mds, [bl, None, None])
 d.sync_booklists([bl, None, None])
 if delete and len(bl):
     lp = bl[0].lpath
-    d.delete_books([lp]); d.remove_books_from_metadata([lp], [bl, None, None]); d.sync_booklists([bl, None, None])
+    d.delete_books([lp]); d.remove_books_from_metadata([lp], [bl]); d.sync_booklists([bl, None, None])
     print('DELETED:', lp, flush=True)
 bl2 = d.books()
 print('BOOKS AFTER:', [(b.title, b.lpath) for b in bl2], flush=True)

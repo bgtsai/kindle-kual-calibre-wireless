@@ -4,8 +4,8 @@ KUAL extension (work in progress) that lets desktop calibre's **Connect/share �
 
 ## Status
 
-- v0.1.0 (`src/main.go`): discovers calibre by UDP broadcast, receives books into `-dir`, keeps calibre's "On device" list in `<dir>/.calibre-wireless.json`, supports delete, exits when calibre ejects. Verified in the cloud against calibre 7.6 (apt) with `test/calibre_server.py`; not yet run on a Kindle.
-- Not done yet: Kindle home thumbnails (`system/thumbnails/thumbnail_{uuid}_{cdetype}_portrait.jpg`), library rescan, airplane mode on/off, sleep prevention, wake reconnect, auto-disconnect timers, KUAL menu/scripts, diagnose button, README.
+- v0.2.0 (`src/main.go`, `src/thumb.go`): discovers calibre by UDP broadcast, receives books into `-dir`, keeps calibre's "On device" list in `<dir>/.calibre-wireless.json`, supports delete, exits when calibre ejects. Writes Kindle home thumbnails like calibre's USB KINDLE2 driver (`system/thumbnails/thumbnail_{EXTH113}_{EXTH501}_portrait.jpg`, cover height 500 = calibre's Oasis 2 value), keeps copies in `amazon-cover-bug/` and restores ones the firmware deleted on every connect, removes them on delete. Device shows as "Wireless device: Kindle". Verified in the cloud against calibre 7.6 (apt) with `test/calibre_server.py` (thumbnail names match calibre's own `MetadataHeader` result); not yet run on a Kindle.
+- Not done yet: library rescan after receiving (planned in the KUAL wrapper), Chinese file names (calibre always transliterates lpaths with `ascii_filename`, USB too; the client could store under a Chinese name and map lpath → file — not decided), KFX thumbnails, airplane mode on/off, sleep prevention, wake reconnect, auto-disconnect timers, KUAL menu/scripts, diagnose button, README.
 
 ## Build
 
@@ -18,7 +18,8 @@ cd src && GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflag
 ```
 apt-get install -y calibre
 calibre-debug test/calibre_server.py -- book1.azw3 book2.azw3 &   # headless calibre side; add --delete to delete the first device book
-./calibre-wireless -dir /tmp/docs
+./calibre-wireless -dir /tmp/k/documents -thumbs /tmp/k/system/thumbnails -cover-cache /tmp/k/amazon-cover-bug
+# put <book>.jpg next to a book to send a full-size cover (the GUI uses the library cover)
 ```
 
 ## Decisions (agreed with the user, don't change without asking)

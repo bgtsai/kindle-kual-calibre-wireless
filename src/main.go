@@ -1,9 +1,10 @@
 // calibre-wireless — Kindle client for calibre's "wireless device connection"
 // (Smart Device App protocol), built on the UNCaGED library.
 //
-// v0.1.0 prototype: discover calibre, receive / list / delete books.
-// Not yet: Kindle thumbnails, library rescan, airplane mode, sleep prevention,
-// auto-disconnect timers (see HANDOFF / README roadmap).
+// v0.2.0: discover calibre, receive / list / delete books, Kindle home-screen
+// cover thumbnails (+ amazon-cover-bug restore), device name shown in calibre.
+// Not yet: library rescan, airplane mode, sleep prevention, auto-disconnect
+// timers (done by the KUAL wrapper / later versions, see CLAUDE.md).
 //
 // Copyright (C) 2026 bgtsai. Licensed under GPL-3.0-or-later (UNCaGED is GPL-3.0).
 package main
@@ -24,17 +25,19 @@ import (
 	"github.com/shermp/UNCaGED/uc"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 // client implements uc.Client. Metadata for every book calibre sent is kept in
 // one JSON file (stateFile) so calibre's "On device" column survives reconnects.
 type client struct {
-	bookDir   string
-	stateFile string
-	devName   string
-	books     []uc.CalibreBookMeta
-	devInfo   uc.DeviceInfo
-	exitChan  chan<- bool
+	bookDir       string
+	stateFile     string
+	devName       string
+	thumbDir      string // Kindle system/thumbnails; "" disables thumbnails
+	coverCacheDir string // copies used to undo the amazon cover bug
+	books         []uc.CalibreBookMeta
+	devInfo       uc.DeviceInfo
+	exitChan      chan<- bool
 }
 
 type state struct {
@@ -101,8 +104,10 @@ func (c *client) GetClientOptions() (uc.ClientOptions, error) {
 	o.DeviceModel = "Kindle"
 	// Formats the Kindle reader opens natively; calibre converts others to the first one it can.
 	o.SupportedExt = []string{"azw3", "mobi", "azw", "pdf", "txt", "kfx"}
-	o.CoverDims.Width = 330 // Kindle home-screen thumbnail size class; tuned later
-	o.CoverDims.Height = 470
+	// calibre's KINDLE2 driver: "x500 on the Oasis 2017. checked that it works on the PW3".
+	// Only the height is sent to calibre (coverHeight); width follows the aspect ratio.
+	o.CoverDims.Width = 330
+	o.CoverDims.Height = 500
 	return o, nil
 }
 
@@ -202,7 +207,10 @@ func (c *client) SaveBook(md uc.CalibreBookMeta, r io.Reader, n int, last bool) 
 	if err := os.Rename(tmp, dst); err != nil {
 		return err
 	}
-	md.Thumbnail = nil // don't bloat the state file; thumbnails go to system/thumbnails later
+	if md.Thumbnail.Exists() {
+		c.writeThumb(dst, md.Thumbnail.ImgBase64())
+	}
+	md.Thumbnail = nil // don't bloat the state file; the image lives in system/thumbnails
 	if i := c.find(md.Lpath); i >= 0 {
 		c.books[i] = md
 	} else {
@@ -233,6 +241,7 @@ func (c *client) GetBook(id uc.BookID, pos int64) (io.ReadCloser, int64, error) 
 
 func (c *client) DeleteBook(id uc.BookID) error {
 	i := c.find(id.Lpath)
+	c.removeThumb(filepath.Join(c.bookDir, id.Lpath)) // needs the book file to read its EXTH
 	if err := os.Remove(filepath.Join(c.bookDir, id.Lpath)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -255,18 +264,30 @@ func main() {
 	dir := flag.String("dir", "/mnt/us/documents", "where received books are stored")
 	stateFile := flag.String("state", "", "metadata state file (default: <dir>/.calibre-wireless.json)")
 	name := flag.String("name", "Kindle", "device name shown in calibre")
+	thumbDir := flag.String("thumbs", "/mnt/us/system/thumbnails", "Kindle thumbnail dir (empty = no thumbnails)")
+	coverCache := flag.String("cover-cache", "/mnt/us/amazon-cover-bug", "thumbnail backup dir (same as calibre's USB driver)")
 	debug := flag.Bool("debug", false, "verbose protocol log")
 	flag.Parse()
 	log.SetFlags(log.Ldate | log.Ltime)
 	log.Printf("calibre-wireless v%s starting, dir=%s", version, *dir)
 
-	c := &client{bookDir: *dir, stateFile: *stateFile, devName: *name}
+	c := &client{bookDir: *dir, stateFile: *stateFile, devName: *name,
+		thumbDir: *thumbDir, coverCacheDir: *coverCache}
 	if c.stateFile == "" {
 		c.stateFile = filepath.Join(*dir, ".calibre-wireless.json")
 	}
 	if err := c.load(); err != nil {
 		log.Fatalf("load state: %v", err)
 	}
+	// calibre shows "Wireless device: <deviceName>"; UNCaGED takes the name from DevInfo,
+	// which is empty until calibre has set it once (v0.1.0 showed only "Wireless device").
+	if c.devInfo.DevInfo.DeviceName == "" {
+		c.devInfo.DevInfo.DeviceName = c.devName
+	}
+	if c.devInfo.DeviceVersion == "" {
+		c.devInfo.DeviceVersion = "Kindle"
+	}
+	c.restoreThumbs()
 	conn, err := uc.New(c, *debug)
 	if err != nil {
 		if errors.Is(err, uc.CalibreNotFound) {
