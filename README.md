@@ -13,7 +13,7 @@ A KUAL extension for jailbroken Kindles. In desktop calibre, **Connect/share →
 - **Books sent over USB show up too**: calibre's device view lists them (from the `metadata.calibre` file calibre's USB driver keeps on the Kindle), and deleting one over Wi-Fi also removes it from that file
 - **Two ways to start**: a KUAL menu item, or a "book" in your library you tap (needs the Universal Hotfix, see [Requirements](#requirements))
 
-> **Tested on:** Kindle Oasis 2, firmware 5.13.5 (kernel 4.1.15), with calibre 7.6 — connecting from KUAL, receiving books, and the library book button. Other models may need adjustments — see [Customizing for your Kindle with AI](#customizing-for-your-kindle-with-ai).
+> **Tested on:** Kindle Oasis 2, firmware 5.13.5 (kernel 4.1.15), with calibre 7.6 — connecting from KUAL and from the library book button, receiving and deleting books (including books sent over USB), on-screen messages, and clock sync. Other models may need adjustments — see [Customizing for your Kindle with AI](#customizing-for-your-kindle-with-ai).
 
 ## Requirements
 
@@ -32,7 +32,7 @@ A KUAL extension for jailbroken Kindles. In desktop calibre, **Connect/share →
 
 No reboot needed.
 
-**Updating:** copy the new zip's contents over the old ones the same way. This resets the file-name setting to Traditional Chinese (it lives in `calibre-wireless.conf`, which is part of the zip).
+**Updating:** copy the new zip's contents over the old ones the same way. If kindle-kual-firewall was updated too, press its **Enable Firewall** again. This resets the file-name setting to Traditional Chinese (it lives in `calibre-wireless.conf`, which is part of the zip).
 
 ### The structure on the Kindle must look exactly like this
 
@@ -110,6 +110,7 @@ Whenever a session ends — for any reason in this table — the Kindle goes bac
 | Step | Time | When it runs out |
 | --- | --- | --- |
 | Waiting for Wi-Fi to connect | **60 s** | Gives up: `Wi-Fi not connected, gave up` |
+| Setting the clock | **20 s** | Skips it (logged), the session continues |
 | Looking for calibre | **5 min** (retried every few seconds) | Gives up: `calibre not found on network` |
 | Connected, but no book arrives | **5 min** | Disconnects |
 | After the last book (or a delete) | **3 min** idle | Disconnects. Every new book or delete starts the 3 minutes again. |

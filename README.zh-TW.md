@@ -13,7 +13,7 @@
 - **USB 傳的書也看得到**：calibre 的裝置清單會列出它們（讀 calibre USB 驅動留在 Kindle 上的 `metadata.calibre`），從無線刪掉時也會同步移除那份紀錄
 - **兩種啟動方式**：KUAL 選單，或點書庫裡的一本「書」（需要 Universal Hotfix，見[需要的東西](#需要的東西)）
 
-> **實測機型：** Kindle Oasis 2、韌體 5.13.5（核心 4.1.15），搭配 calibre 7.6——KUAL 連線、收書、書庫書本按鈕都測過。其他機型可能要調整，見[請 AI 幫你改成適合你的 Kindle](#請-ai-幫你改成適合你的-kindle)。
+> **實測機型：** Kindle Oasis 2、韌體 5.13.5（核心 4.1.15），搭配 calibre 7.6——KUAL 與書庫書本按鈕連線、收書與刪書（含 USB 傳的書）、畫面訊息、對時都測過。其他機型可能要調整，見[請 AI 幫你改成適合你的 Kindle](#請-ai-幫你改成適合你的-kindle)。
 
 ## 需要的東西
 
@@ -32,7 +32,7 @@
 
 不需要重開機。
 
-**更新：** 把新 zip 的內容照同樣方式蓋過去。檔名設定會回到「繁體」（設定存在 `calibre-wireless.conf`，它在 zip 裡）。
+**更新：** 把新 zip 的內容照同樣方式蓋過去。如果 kindle-kual-firewall 也更新了，要再按一次它的 **Enable Firewall**。檔名設定會回到「繁體」（設定存在 `calibre-wireless.conf`，它在 zip 裡）。
 
 ### Kindle 上的結構一定要長這樣
 
@@ -110,6 +110,7 @@ Calibre Wireless ▸
 | 步驟 | 時間 | 時間到了會怎樣 |
 | --- | --- | --- |
 | 等 Wi-Fi 連上 | **60 秒** | 放棄：`Wi-Fi not connected, gave up` |
+| 對時 | **20 秒** | 略過（記在 log），連線繼續 |
 | 尋找 calibre | **5 分鐘**（每幾秒重試一次） | 放棄：`calibre not found on network` |
 | 連上了，但一直沒傳書 | **5 分鐘** | 斷線 |
 | 最後一本傳完（或刪完書）之後 | 閒置 **3 分鐘** | 斷線。每傳一本或刪一本，都會重新倒數 3 分鐘。 |
