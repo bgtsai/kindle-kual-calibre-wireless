@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless diagnose.sh v0.7.1 — 唯讀，不改任何設定
+# calibre-wireless diagnose.sh v0.8.0 — 唯讀，不改任何設定
 # 結果寫到使用者區（USB 拿得到）：
 #   extensions/calibre-wireless/diagnose.txt         一次性的系統資訊
 #   extensions/calibre-wireless/diagnose_events.txt  按下後 EVENT_RECORD_S 秒內的 powerd／wifid／cmd 事件
@@ -18,7 +18,7 @@ POLL_S=3
 section() { echo; echo "===== $1 ====="; }
 
 {
-    echo "calibre-wireless diagnose v0.7.1  $(date)"
+    echo "calibre-wireless diagnose v0.8.0  $(date)"
 
     section "firmware / kernel"
     cat /etc/prettyversion.txt 2>&1
@@ -26,7 +26,7 @@ section() { echo; echo "===== $1 ====="; }
     uname -a 2>&1
 
     section "tools"
-    for t in lipc-get-prop lipc-set-prop lipc-wait-event lipc-probe eips fbink iptables mkfifo timeout; do
+    for t in lipc-get-prop lipc-set-prop lipc-wait-event lipc-probe eips fbink iptables mkfifo timeout ntpdate ntpd hwclock; do
         printf '%s: ' "$t"; which "$t" 2>/dev/null || echo "(not found)"
     done
     printf 'client: '; ls -l "$CLIENT" 2>&1
@@ -56,6 +56,10 @@ section() { echo; echo "===== $1 ====="; }
     echo "--- eips -i"
     eips -i 2>&1
     echo "eips_rows (yres / EIPS_ROW_PX=$EIPS_ROW_PX): $(eips_rows)"
+
+    section "clock"
+    echo "date: $(date)  hwclock: $(hwclock -r 2>&1)"
+    printf 'isTimeAutoUpdateEnabled: '; lipc-get-prop com.lab126.system isTimeAutoUpdateEnabled 2>&1
 
     section "wireless state"
     printf 'com.lab126.cmd wirelessEnable: '; lipc-get-prop com.lab126.cmd wirelessEnable 2>&1

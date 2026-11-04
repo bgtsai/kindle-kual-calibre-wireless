@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless session.sh v0.6.0
+# calibre-wireless session.sh v0.8.0
 # 一次連線階段，由 toggle.sh 在背景啟動（單一實例：toggle.sh 寫 $PIDFILE）。
 #   解除飛行模式 → 等 Wi-Fi 連上（最多 WIFI_WAIT_S）→ 開 INPUT 讓 calibre 的廣播回覆進來
 #   → 防休眠 → 跑 Go client → 結束（任何原因）一律：恢復休眠、關 INPUT、回飛行模式、掃描書庫。
@@ -64,6 +64,31 @@ wait_wifi() {
         n=$((n - 1))
     done
     return 1
+}
+
+# 網路對時：Kindle 長期飛行模式不對時，時鐘會停住（實測停在 2020-11-01），新書的時間全錯、
+# 「最近」排序跟著錯。每次連線順便用 pool.ntp.org（志願者時間伺服器，不是 Amazon）校正，
+# 做法同 KOReader 的 timesync 外掛：ntpdate pool.ntp.org → hwclock -u -w（寫回硬體時鐘，重開機不跑掉）。
+# 沒有 ntpdate 就用 busybox ntpd -q。需要 kindle-kual-firewall ≥ 1.16（放行 UDP 123）。
+# 失敗只記 log，不影響傳書。整段包 timeout，剛開機 DNS 還沒好時不會拖住連線。
+NTP_SERVER="pool.ntp.org"
+NTP_TIMEOUT_S=20
+sync_clock() {
+    before="$(date '+%Y-%m-%d %H:%M:%S')"
+    if which ntpdate >/dev/null 2>&1; then
+        out="$(timeout -t "$NTP_TIMEOUT_S" ntpdate "$NTP_SERVER" 2>&1)"; rc=$?
+    elif which ntpd >/dev/null 2>&1; then
+        out="$(timeout -t "$NTP_TIMEOUT_S" ntpd -q -n -p "$NTP_SERVER" 2>&1)"; rc=$?
+    else
+        log "WARN: clock sync skipped, no ntpdate/ntpd" "警告：沒有 ntpdate／ntpd，略過對時"
+        return
+    fi
+    if [ "$rc" = 0 ]; then
+        hwclock -u -w 2>>"$LOG"
+        log "Clock synced: $before -> $(date '+%Y-%m-%d %H:%M:%S')" "已對時（前後時間見上一行）"
+    else
+        log "WARN: clock sync failed (rc=$rc): $(echo "$out" | tail -n 1)" "警告：對時失敗（原因見上一行）"
+    fi
 }
 
 cleanup() {
@@ -137,6 +162,8 @@ while :; do
         break
     fi
     log "Wi-Fi connected" "Wi-Fi 已連上"
+    # 只在第一次連上時對時（重連時不必再做）
+    [ "$tries" = 0 ] && sync_clock
     notify "calibre: searching for calibre..."
     input_open
     sleep_block 1

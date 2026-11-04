@@ -20,7 +20,7 @@
 - 已**越獄**、裝好 **KUAL** 的 Kindle
 - **同一個 Wi-Fi 網路**裡、裝了 calibre 的電腦（不能是訪客網路，也不能是開了「AP 隔離／用戶端隔離」的路由器，那會擋掉搜尋用的廣播）
 - 只有書庫書本按鈕需要：[KindleModding 的 Universal Hotfix](https://github.com/KindleModding/Hotfix)（它的 sh_integration 會讓 `documents/` 裡的 `.sh` 變成書）。書庫裡有 **Run Hotfix** 這本書就是有裝。KUAL 選單不需要它。安裝方式見[安裝 Universal Hotfix](#安裝-universal-hotfix)。
-- 如果有用 [kindle-kual-firewall](https://github.com/bgtsai/kindle-kual-firewall)：要 **1.9 以上**（放行 calibre 的搜尋廣播）
+- 如果有用 [kindle-kual-firewall](https://github.com/bgtsai/kindle-kual-firewall)：要 **1.9 以上**（放行 calibre 的搜尋廣播）；要對時則需 **1.16 以上**
 
 ## 安裝
 
@@ -96,11 +96,12 @@ Calibre Wireless ▸
 ## 一次連線會做什麼
 
 1. 解除飛行模式，最多等 **60 秒** Wi-Fi 連上（等不到就放棄、回到飛行模式）。
-2. 連線期間在 Kindle 自己的防火牆（`iptables INPUT`）開一個口給 calibre 的回覆——只收**來自** calibre 那 5 個廣播埠的 UDP。
-3. 防止休眠（`com.lab126.powerd preventScreenSaver`）。
-4. 廣播尋找 calibre，每幾秒重試一次、最多 **5 分鐘**（剛開機時 `255.255.255.255` 送不出去的話，改用你網段的廣播位址，例如 `192.168.1.255`），再用 TCP 跟它連線。
-5. 連線中斷（多半是 Kindle 休眠了）就等 Wi-Fi 回來再重連，最多 3 次。
-6. 結束時不管原因：恢復休眠、移除防火牆規則、回到飛行模式、重新掃描書庫。最後一句訊息停留 4 秒，然後把提示列擦掉。
+2. 用 `pool.ntp.org`（公開的志願者時間伺服器，不是 Amazon；做法同 KOReader 的對時外掛）校正 Kindle 時鐘——長期飛行模式的 Kindle 從不對時，時鐘會停住，「最近」排序也會跟著錯。失敗只記 log。
+3. 連線期間在 Kindle 自己的防火牆（`iptables INPUT`）開一個口給 calibre 的回覆——只收**來自** calibre 那 5 個廣播埠的 UDP。
+4. 防止休眠（`com.lab126.powerd preventScreenSaver`）。
+5. 廣播尋找 calibre，每幾秒重試一次、最多 **5 分鐘**（剛開機時 `255.255.255.255` 送不出去的話，改用你網段的廣播位址，例如 `192.168.1.255`），再用 TCP 跟它連線。
+6. 連線中斷（多半是 Kindle 休眠了）就等 Wi-Fi 回來再重連，最多 3 次。
+7. 結束時不管原因：恢復休眠、移除防火牆規則、回到飛行模式、重新掃描書庫。最後一句訊息停留 4 秒，然後把提示列擦掉。
 
 ### 各步驟等多久
 
@@ -154,7 +155,7 @@ Calibre Wireless ▸
 
 - **畫面訊息是英文**：訊息是直接畫在螢幕上的（FBInk，沒裝 Universal Hotfix 時用 `eips`），這裡只能畫 ASCII。
 - **擦掉後會留一條空白，等 Kindle 重畫才恢復**：訊息改的是螢幕像素，Kindle 介面不知道。結束時會擦掉，但那幾列原本的介面內容（例如閱讀進度那一行）要等介面重畫（翻頁、開書）才會回來。沒有查到能讓介面「只重畫、不切換畫面」的指令。訊息用 FBInk 畫（Universal Hotfix 附帶）；FBInk 不存在或執行失敗時，改用 `eips` 畫在靠近底部的位置（它的列高是估計值，位置可能略有不同），那一列被拒畫就畫在頂端。FBInk 失敗會在 log 記一次（`WARN: fbink failed`）。
-- **Kindle 的時鐘**如果長期在飛行模式、從不對時，可能是錯的，所以 log 的時間會不準。傳書不受影響。
+- **對時需要 Wi-Fi 能連到 `pool.ntp.org`**（UDP 123；kindle-kual-firewall 1.16 以上會放行）。剛開機的幾分鐘 Kindle 可能還沒有 DNS，那次連線可能對時失敗，log 會寫 `clock sync failed`。
 - **KFX 檔**還沒有首頁縮圖。
 - **更新會重設設定**：蓋過新 zip 會覆蓋 `calibre-wireless.conf`。
 - **不支援密碼**：calibre 的無線連線密碼要留空。

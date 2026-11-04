@@ -20,7 +20,7 @@ A KUAL extension for jailbroken Kindles. In desktop calibre, **Connect/share →
 - A **jailbroken** Kindle with **KUAL**
 - calibre on a computer in the **same Wi-Fi network** (not a guest network, and not a router with "AP / client isolation" — those block the discovery broadcast)
 - For the library book button only: the [KindleModding Universal Hotfix](https://github.com/KindleModding/Hotfix) (its *sh_integration* turns `.sh` files in `documents/` into books). If your library shows a **Run Hotfix** book, you have it. The KUAL menu works without it. Installing it: see [Installing the Universal Hotfix](#installing-the-universal-hotfix).
-- If you use [kindle-kual-firewall](https://github.com/bgtsai/kindle-kual-firewall): version **1.9 or later** (it allows calibre's discovery broadcast)
+- If you use [kindle-kual-firewall](https://github.com/bgtsai/kindle-kual-firewall): version **1.9 or later** (it allows calibre's discovery broadcast); **1.16 or later** for the clock sync
 
 ## Installation
 
@@ -96,11 +96,12 @@ Calibre Wireless ▸
 ## What happens during a session
 
 1. Airplane mode off; waits up to **60 s** for Wi-Fi to connect (otherwise gives up and goes back to airplane mode).
-2. Opens the Kindle's own firewall (`iptables INPUT`) for calibre's reply — UDP coming **from** calibre's 5 broadcast ports only — for as long as the session runs.
-3. Blocks sleep (`com.lab126.powerd preventScreenSaver`).
-4. Broadcasts to find calibre, again every few seconds for up to **5 minutes** (falls back to your subnet's broadcast address, e.g. `192.168.1.255`, if `255.255.255.255` fails right after boot), then talks to it over TCP.
-5. If the connection drops (usually because the Kindle slept), waits for Wi-Fi to come back and reconnects — up to 3 times.
-6. At the end, whatever the reason: sleep allowed again, firewall rule removed, airplane mode on, library rescan. The last message stays for 4 seconds, then the message lines are wiped.
+2. Sets the Kindle's clock from `pool.ntp.org` (public volunteer time servers, not Amazon; same method as KOReader's time-sync plugin) — a Kindle that is always in airplane mode never syncs and its clock stops, which also breaks the "Recent" sort order. A failure is only logged.
+3. Opens the Kindle's own firewall (`iptables INPUT`) for calibre's reply — UDP coming **from** calibre's 5 broadcast ports only — for as long as the session runs.
+4. Blocks sleep (`com.lab126.powerd preventScreenSaver`).
+5. Broadcasts to find calibre, again every few seconds for up to **5 minutes** (falls back to your subnet's broadcast address, e.g. `192.168.1.255`, if `255.255.255.255` fails right after boot), then talks to it over TCP.
+6. If the connection drops (usually because the Kindle slept), waits for Wi-Fi to come back and reconnects — up to 3 times.
+7. At the end, whatever the reason: sleep allowed again, firewall rule removed, airplane mode on, library rescan. The last message stays for 4 seconds, then the message lines are wiped.
 
 ### How long each step waits
 
@@ -154,7 +155,7 @@ Lines with `-` in the date come from the shell scripts and are written twice: En
 
 - **The on-screen messages are English**: they are drawn directly on the screen (FBInk, or `eips` without the Universal Hotfix), which only does ASCII here.
 - **Wiped messages leave a blank line until the Kindle redraws**: the messages replace screen pixels the Kindle's own interface doesn't know about. They are wiped at the end, but whatever the interface showed in those lines (e.g. the reading progress line) only comes back when it redraws (turning a page, opening a book). No command was found that makes the interface redraw without switching screens. Messages are drawn with FBInk (comes with the Universal Hotfix); if FBInk is missing or fails, `eips` draws them near the bottom instead (its row height is estimated, so the exact position may differ), or at the top if that row is rejected. An FBInk failure is written to the log once (`WARN: fbink failed`).
-- **The Kindle's clock** may be wrong if it is always in airplane mode (it never syncs), so log times can be off. Transfers are not affected.
+- **Clock sync needs Wi-Fi internet access** to `pool.ntp.org` (UDP 123; kindle-kual-firewall ≥ 1.16 allows it). Right after boot the Kindle may have no DNS for a few minutes, so the first session after boot may skip the sync — the log shows `clock sync failed`.
 - **KFX files**: no home-screen thumbnail yet.
 - **Settings reset on update**: copying a new zip overwrites `calibre-wireless.conf`.
 - **No password**: a calibre wireless password is not supported; leave it empty.
