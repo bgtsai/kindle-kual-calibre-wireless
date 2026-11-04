@@ -1,12 +1,18 @@
 # Headless calibre smart-device server for testing a wireless client.
 # Usage: calibre-debug server.py -- <book files...>
 # Waits for a client, lists device books, uploads given files (totalBooks=N), lists again, ejects.
+# --hold S: before ejecting, stay connected up to S seconds (polls like the GUI); stops early
+#           when the client disconnects — used to test the client's auto-disconnect timers.
 import sys, time
 from calibre.customize.ui import device_plugins
 from calibre.devices.smart_device_app.driver import SMART_DEVICE_APP
 
 delete = '--delete' in sys.argv
-files = [a for a in sys.argv[1:] if a != '--delete']
+hold = 0
+args = sys.argv[1:]
+if '--hold' in args:
+    i = args.index('--hold'); hold = float(args[i + 1]); del args[i:i + 2]
+files = [a for a in args if a != '--delete']
 d = [p for p in device_plugins() if isinstance(p, SMART_DEVICE_APP)][0]
 d.report_progress = lambda *a, **k: None
 d.startup()
@@ -52,6 +58,15 @@ if delete and len(bl):
     print('DELETED:', lp, flush=True)
 bl2 = d.books()
 print('BOOKS AFTER:', [(b.title, b.lpath) for b in bl2], flush=True)
+if hold:
+    t0 = time.time()
+    while time.time() - t0 < hold:
+        # The GUI's device job polls detect_managed_devices; it notices a dropped client.
+        if not d.detect_managed_devices([dev]):
+            print('CLIENT GONE after %.0fs' % (time.time() - t0), flush=True)
+            d.stop_plugin(); sys.exit(0)
+        time.sleep(1)
+    print('HOLD over, client still connected', flush=True)
 d.eject()
 print('EJECTED', flush=True)
 d.stop_plugin()

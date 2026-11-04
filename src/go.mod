@@ -12,3 +12,5 @@ require (
 	github.com/liuzl/da v0.0.0-20180704015230-14771aad5b1d // indirect
 	github.com/slongfield/pyfmt v0.0.0-20180124071345-020a7cb18bca // indirect
 )
+
+replace github.com/shermp/UNCaGED => ./third_party/UNCaGED

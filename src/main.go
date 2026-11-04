@@ -1,11 +1,14 @@
 // calibre-wireless — Kindle client for calibre's "wireless device connection"
 // (Smart Device App protocol), built on the UNCaGED library.
 //
-// v0.3.0: discover calibre, receive / list / delete books, Kindle home-screen
-// cover thumbnails (+ amazon-cover-bug restore), device name shown in calibre,
-// Chinese file names (traditional / simplified / original, calibre-wireless.conf).
-// Not yet: library rescan, airplane mode, sleep prevention, auto-disconnect
-// timers (done by the KUAL wrapper / later versions, see CLAUDE.md).
+// v0.4.0: discover calibre (subnet-broadcast fallback), receive / list / delete books,
+// Kindle home-screen cover thumbnails (+ amazon-cover-bug restore), device name shown
+// in calibre, Chinese file names (traditional / simplified / original,
+// calibre-wireless.conf), auto-disconnect timers, progress lines for the KUAL wrapper.
+// Airplane mode, sleep prevention and library rescan are done by bin/session.sh.
+//
+// Log lines bin/session.sh matches (keep in sync): "connected to calibre",
+// "book <n>/<N> received", "auto-disconnect".
 //
 // Copyright (C) 2026 bgtsai. Licensed under GPL-3.0-or-later (UNCaGED is GPL-3.0).
 package main
@@ -27,7 +30,7 @@ import (
 	"github.com/shermp/UNCaGED/uc"
 )
 
-const version = "0.3.0"
+const version = "0.4.0"
 
 // client implements uc.Client. Metadata for every book calibre sent is kept in
 // one JSON file (stateFile) so calibre's "On device" column survives reconnects.
@@ -43,6 +46,10 @@ type client struct {
 	conv          *opencc.OpenCC // nil = keep calibre's script
 	devInfo       uc.DeviceInfo
 	exitChan      chan<- bool
+	idle          *idleTimer
+	bookNo        int // 1-based number of the book being received (calibre's thisBook+1)
+	bookTotal     int
+	sessionUp     bool // "connected to calibre" logged, no-book timer armed
 }
 
 type state struct {
@@ -235,6 +242,8 @@ func (c *client) SaveBook(md uc.CalibreBookMeta, r io.Reader, n int, last bool) 
 		c.files[md.Lpath] = file
 	}
 	log.Printf("saved %s as %s (%d bytes) last=%v", md.Lpath, file, n, last)
+	log.Printf("book %d/%d received", c.bookNo, c.bookTotal)
+	c.idle.arm(afterBookTimeout, "idle after last book")
 	return c.save()
 }
 
@@ -264,6 +273,9 @@ func (c *client) DeleteBook(id uc.BookID) error {
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	// Deleting books is activity too: restart the idle countdown instead of letting the
+	// "no book received" timer cut the user off while they are cleaning up the device.
+	c.idle.arm(afterBookTimeout, "idle after last book/delete")
 	if i >= 0 {
 		c.books = append(c.books[:i], c.books[i+1:]...)
 	}
@@ -272,13 +284,36 @@ func (c *client) DeleteBook(id uc.BookID) error {
 	return c.save()
 }
 
-func (c *client) UpdateStatus(s uc.Status, p int) { log.Printf("status %d progress %d", s, p) }
+func (c *client) UpdateStatus(s uc.Status, p int) {
+	log.Printf("status %d progress %d", s, p)
+	// UNCaGED only reports Connected when calibre asks GET_DEVICE_INFORMATION, which
+	// calibre 7.6 doesn't do (tested); Idle/Waiting arrive once the session is up.
+	// Only the first one arms the no-book timer: Idle repeats on every NOOP.
+	if !c.sessionUp && (s == uc.Connected || s == uc.Idle || s == uc.Waiting) {
+		c.sessionUp = true
+		log.Printf("connected to calibre")
+		if c.bookNo == 0 { // a book already started: its own idle timer is in charge
+			c.idle.arm(noBookTimeout, "no book received")
+		}
+	}
+}
+
+// BookStart implements the patched uc.BookProgresser (third_party/UNCaGED): called
+// before each SaveBook with calibre's thisBook (0-based) and totalBooks.
+// The idle timer is stopped while a book is being received (a big book can take minutes).
+func (c *client) BookStart(thisBook, totalBooks int) {
+	c.bookNo, c.bookTotal = thisBook+1, totalBooks
+	c.idle.stop()
+}
 
 func (c *client) LogPrintf(l uc.LogLevel, f string, a ...interface{}) {
 	log.Printf("[uc %d] "+f, append([]interface{}{l}, a...)...)
 }
 
-func (c *client) SetExitChannel(ch chan<- bool) { c.exitChan = ch }
+func (c *client) SetExitChannel(ch chan<- bool) {
+	c.exitChan = ch
+	c.idle = newIdleTimer(ch)
+}
 
 func main() {
 	// Own FlagSet: the opencc package registers a global "-dir" flag in its init(),
@@ -291,6 +326,8 @@ func main() {
 	coverCache := flag.String("cover-cache", "/mnt/us/amazon-cover-bug", "thumbnail backup dir (same as calibre's USB driver)")
 	confFile := flag.String("conf", "", "settings file (default: calibre-wireless.conf next to the program's bin/ dir)")
 	debug := flag.Bool("debug", false, "verbose protocol log")
+	flag.DurationVar(&noBookTimeout, "no-book-timeout", noBookTimeout, "disconnect if no book arrives this long after connecting (0 = never)")
+	flag.DurationVar(&afterBookTimeout, "idle-timeout", afterBookTimeout, "disconnect this long after the last book or delete (0 = never)")
 	flag.Parse(os.Args[1:])
 	log.SetFlags(log.Ldate | log.Ltime)
 	log.Printf("calibre-wireless v%s starting, dir=%s", version, *dir)
