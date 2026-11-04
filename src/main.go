@@ -1,8 +1,9 @@
 // calibre-wireless — Kindle client for calibre's "wireless device connection"
 // (Smart Device App protocol), built on the UNCaGED library.
 //
-// v0.2.0: discover calibre, receive / list / delete books, Kindle home-screen
-// cover thumbnails (+ amazon-cover-bug restore), device name shown in calibre.
+// v0.3.0: discover calibre, receive / list / delete books, Kindle home-screen
+// cover thumbnails (+ amazon-cover-bug restore), device name shown in calibre,
+// Chinese file names (traditional / simplified / original, calibre-wireless.conf).
 // Not yet: library rescan, airplane mode, sleep prevention, auto-disconnect
 // timers (done by the KUAL wrapper / later versions, see CLAUDE.md).
 //
@@ -22,10 +23,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/longbridgeapp/opencc"
 	"github.com/shermp/UNCaGED/uc"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 // client implements uc.Client. Metadata for every book calibre sent is kept in
 // one JSON file (stateFile) so calibre's "On device" column survives reconnects.
@@ -36,12 +38,16 @@ type client struct {
 	thumbDir      string // Kindle system/thumbnails; "" disables thumbnails
 	coverCacheDir string // copies used to undo the amazon cover bug
 	books         []uc.CalibreBookMeta
+	files         map[string]string // calibre lpath → file name in bookDir (see naming.go)
+	cfg           Config
+	conv          *opencc.OpenCC // nil = keep calibre's script
 	devInfo       uc.DeviceInfo
 	exitChan      chan<- bool
 }
 
 type state struct {
 	Books   []uc.CalibreBookMeta `json:"books"`
+	Files   map[string]string    `json:"files,omitempty"`
 	DevInfo uc.DeviceInfo        `json:"device_info"`
 }
 
@@ -59,11 +65,19 @@ func (c *client) load() error {
 	}
 	// Drop entries whose file was deleted on the Kindle (e.g. from the Kindle UI),
 	// otherwise calibre would keep showing them as "on device".
+	c.files = map[string]string{}
 	for _, md := range s.Books {
-		if _, err := os.Stat(filepath.Join(c.bookDir, md.Lpath)); err == nil {
+		f := md.Lpath
+		if v, ok := s.Files[md.Lpath]; ok {
+			f = v
+		}
+		if _, err := os.Stat(filepath.Join(c.bookDir, f)); err == nil {
 			c.books = append(c.books, md)
+			if f != md.Lpath {
+				c.files[md.Lpath] = f
+			}
 		} else {
-			log.Printf("state: %s no longer on device, dropped", md.Lpath)
+			log.Printf("state: %s no longer on device, dropped", f)
 		}
 	}
 	c.devInfo = s.DevInfo
@@ -72,7 +86,7 @@ func (c *client) load() error {
 
 // save writes to a temp file then renames, so a crash mid-write can't corrupt the list.
 func (c *client) save() error {
-	b, err := json.Marshal(state{Books: c.books, DevInfo: c.devInfo})
+	b, err := json.Marshal(state{Books: c.books, Files: c.files, DevInfo: c.devInfo})
 	if err != nil {
 		return err
 	}
@@ -186,9 +200,10 @@ func (c *client) GetFreeSpace() uint64 {
 func (c *client) CheckLpath(lpath string) string { return lpath }
 
 func (c *client) SaveBook(md uc.CalibreBookMeta, r io.Reader, n int, last bool) error {
-	dst := filepath.Join(c.bookDir, md.Lpath)
+	file := c.pickFile(md)
+	dst := filepath.Join(c.bookDir, file)
 	if !strings.HasPrefix(filepath.Clean(dst), filepath.Clean(c.bookDir)+string(os.PathSeparator)) {
-		return fmt.Errorf("refusing lpath outside book dir: %q", md.Lpath)
+		return fmt.Errorf("refusing path outside book dir: %q", file)
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return err
@@ -216,12 +231,15 @@ func (c *client) SaveBook(md uc.CalibreBookMeta, r io.Reader, n int, last bool) 
 	} else {
 		c.books = append(c.books, md)
 	}
-	log.Printf("saved %s (%d bytes) last=%v", md.Lpath, n, last)
+	if file != md.Lpath {
+		c.files[md.Lpath] = file
+	}
+	log.Printf("saved %s as %s (%d bytes) last=%v", md.Lpath, file, n, last)
 	return c.save()
 }
 
 func (c *client) GetBook(id uc.BookID, pos int64) (io.ReadCloser, int64, error) {
-	f, err := os.Open(filepath.Join(c.bookDir, id.Lpath))
+	f, err := os.Open(filepath.Join(c.bookDir, c.fileFor(id.Lpath)))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -241,14 +259,16 @@ func (c *client) GetBook(id uc.BookID, pos int64) (io.ReadCloser, int64, error) 
 
 func (c *client) DeleteBook(id uc.BookID) error {
 	i := c.find(id.Lpath)
-	c.removeThumb(filepath.Join(c.bookDir, id.Lpath)) // needs the book file to read its EXTH
-	if err := os.Remove(filepath.Join(c.bookDir, id.Lpath)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	path := filepath.Join(c.bookDir, c.fileFor(id.Lpath))
+	c.removeThumb(path) // needs the book file to read its EXTH
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	if i >= 0 {
 		c.books = append(c.books[:i], c.books[i+1:]...)
 	}
-	log.Printf("deleted %s", id.Lpath)
+	delete(c.files, id.Lpath)
+	log.Printf("deleted %s (%s)", id.Lpath, filepath.Base(path))
 	return c.save()
 }
 
@@ -261,18 +281,30 @@ func (c *client) LogPrintf(l uc.LogLevel, f string, a ...interface{}) {
 func (c *client) SetExitChannel(ch chan<- bool) { c.exitChan = ch }
 
 func main() {
+	// Own FlagSet: the opencc package registers a global "-dir" flag in its init(),
+	// which made the default FlagSet panic with "flag redefined: dir".
+	flag := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	dir := flag.String("dir", "/mnt/us/documents", "where received books are stored")
 	stateFile := flag.String("state", "", "metadata state file (default: <dir>/.calibre-wireless.json)")
 	name := flag.String("name", "Kindle", "device name shown in calibre")
 	thumbDir := flag.String("thumbs", "/mnt/us/system/thumbnails", "Kindle thumbnail dir (empty = no thumbnails)")
 	coverCache := flag.String("cover-cache", "/mnt/us/amazon-cover-bug", "thumbnail backup dir (same as calibre's USB driver)")
+	confFile := flag.String("conf", "", "settings file (default: calibre-wireless.conf next to the program's bin/ dir)")
 	debug := flag.Bool("debug", false, "verbose protocol log")
-	flag.Parse()
+	flag.Parse(os.Args[1:])
 	log.SetFlags(log.Ldate | log.Ltime)
 	log.Printf("calibre-wireless v%s starting, dir=%s", version, *dir)
 
 	c := &client{bookDir: *dir, stateFile: *stateFile, devName: *name,
-		thumbDir: *thumbDir, coverCacheDir: *coverCache}
+		thumbDir: *thumbDir, coverCacheDir: *coverCache, files: map[string]string{}}
+	if *confFile == "" {
+		if exe, err := os.Executable(); err == nil {
+			*confFile = filepath.Join(filepath.Dir(filepath.Dir(exe)), "calibre-wireless.conf")
+		}
+	}
+	c.cfg = loadConfig(*confFile)
+	c.conv = newConverter(c.cfg.FilenameChinese)
+	log.Printf("config %s: filename_chinese=%s", *confFile, c.cfg.FilenameChinese)
 	if c.stateFile == "" {
 		c.stateFile = filepath.Join(*dir, ".calibre-wireless.json")
 	}
