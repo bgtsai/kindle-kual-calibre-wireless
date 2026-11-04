@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless session.sh v0.5.0
+# calibre-wireless session.sh v0.6.0
 # 一次連線階段，由 toggle.sh 在背景啟動（單一實例：toggle.sh 寫 $PIDFILE）。
 #   解除飛行模式 → 等 Wi-Fi 連上（最多 WIFI_WAIT_S）→ 開 INPUT 讓 calibre 的廣播回覆進來
 #   → 防休眠 → 跑 Go client → 結束（任何原因）一律：恢復休眠、關 INPUT、回飛行模式、掃描書庫。
@@ -18,8 +18,8 @@ CALIBRE_BROADCAST_PORTS="54982 48123 39001 44044 59678"
 # 每個埠最多刪幾次 INPUT 規則（每次重連加一組，RECONNECT_MAX+1 組就夠，多留餘裕）
 INPUT_DELETE_MAX=10
 FIFO="/tmp/calibre-wireless.fifo"
-# 書本數的提示寫在第 3 列，不蓋掉第 2 列的狀態
-PROGRESS_ROW=3
+# 書本數的提示寫在底部第 2 列（狀態那列的上面），不蓋掉狀態
+PROGRESS_ROW=2
 
 cpid=""
 rpid=""
@@ -82,6 +82,9 @@ cleanup() {
     rm -f "$PIDFILE"
     render_menu
     log "Session ended, airplane mode on" "連線結束，已回到飛行模式"
+    # 最後一句訊息留幾秒讓使用者看到，再把提示列擦掉（不然會一直殘留在畫面上）
+    sleep "$NOTIFY_CLEAR_DELAY_S"
+    clear_notify
 }
 
 on_term() {

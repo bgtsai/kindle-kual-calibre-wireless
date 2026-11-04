@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless diagnose.sh v0.4.0 — 唯讀，不改任何設定
+# calibre-wireless diagnose.sh v0.6.0 — 唯讀，不改任何設定
 # 結果寫到使用者區（USB 拿得到）：
 #   extensions/calibre-wireless/diagnose.txt         一次性的系統資訊
 #   extensions/calibre-wireless/diagnose_events.txt  按下後 EVENT_RECORD_S 秒內的 powerd／wifid／cmd 事件
@@ -92,7 +92,7 @@ section() { echo; echo "===== $1 ====="; }
     done
     kill "$w1" "$w2" "$w3" 2>/dev/null
     echo >> "$EVENTS"; echo "end $(date)" >> "$EVENTS"
-    notify "calibre-wireless: events recorded" 3
+    notify_brief "calibre-wireless: events recorded"
 ) </dev/null >/dev/null 2>&1 &
 
 notify "diagnose.txt written - sleep/wake + toggle Wi-Fi now (2 min)"

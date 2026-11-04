@@ -1,6 +1,7 @@
 // calibre-wireless — Kindle client for calibre's "wireless device connection"
 // (Smart Device App protocol), built on the UNCaGED library.
 //
+// v0.6.0: keep searching for calibre up to 5 min (-search-timeout).
 // v0.5.0: one folder per book (documents/<title>/<title> - <authors>.<ext>), .sdr cleanup on delete.
 // v0.4.0: discover calibre (subnet-broadcast fallback), receive / list / delete books,
 // Kindle home-screen cover thumbnails (+ amazon-cover-bug restore), device name shown
@@ -31,7 +32,7 @@ import (
 	"github.com/shermp/UNCaGED/uc"
 )
 
-const version = "0.5.0"
+const version = "0.6.0"
 
 // client implements uc.Client. Metadata for every book calibre sent is kept in
 // one JSON file (stateFile) so calibre's "On device" column survives reconnects.
@@ -316,6 +317,42 @@ func (c *client) removeSidecars(bookPath string) {
 	}
 }
 
+// searchTimeout: how long to keep looking for calibre (decided with the user 2026-11-05:
+// people tap "connect" on the Kindle first and only then open calibre). One UNCaGED
+// discovery round takes only a few seconds, so it is repeated every searchRetryInterval.
+// time.Since uses Go's monotonic clock (CLOCK_MONOTONIC), which does not advance while
+// the Kindle is suspended, so sleeping doesn't use up the search time.
+var (
+	searchTimeout       = 5 * time.Minute
+	searchRetryInterval = 2 * time.Second
+)
+
+// findCalibre retries discovery until calibre answers or searchTimeout passes.
+// "Not found" and broadcast send errors (no route yet right after boot, KB 32 §8) are
+// retried; anything else (e.g. reading our own state) fails at once.
+// starter is what main needs from UNCaGED's (unexported) connection type.
+type starter interface{ Start() error }
+
+func findCalibre(c *client, debug bool, timeout time.Duration) (starter, error) {
+	start := time.Now()
+	logged := false
+	for {
+		conn, err := uc.New(c, debug)
+		if err == nil {
+			return conn, nil
+		}
+		retry := errors.Is(err, uc.CalibreNotFound) || strings.Contains(err.Error(), "error getting calibre instances")
+		if !retry || time.Since(start) >= timeout {
+			return nil, err
+		}
+		if !logged {
+			log.Printf("searching for calibre (up to %s): %v", timeout, err)
+			logged = true
+		}
+		time.Sleep(searchRetryInterval)
+	}
+}
+
 func (c *client) UpdateStatus(s uc.Status, p int) {
 	log.Printf("status %d progress %d", s, p)
 	// UNCaGED only reports Connected when calibre asks GET_DEVICE_INFORMATION, which
@@ -358,6 +395,7 @@ func main() {
 	coverCache := flag.String("cover-cache", "/mnt/us/amazon-cover-bug", "thumbnail backup dir (same as calibre's USB driver)")
 	confFile := flag.String("conf", "", "settings file (default: calibre-wireless.conf next to the program's bin/ dir)")
 	debug := flag.Bool("debug", false, "verbose protocol log")
+	flag.DurationVar(&searchTimeout, "search-timeout", searchTimeout, "keep looking for calibre this long (users often tap connect first, then start calibre)")
 	flag.DurationVar(&noBookTimeout, "no-book-timeout", noBookTimeout, "disconnect if no book arrives this long after connecting (0 = never)")
 	flag.DurationVar(&afterBookTimeout, "idle-timeout", afterBookTimeout, "disconnect this long after the last book or delete (0 = never)")
 	flag.Parse(os.Args[1:])
@@ -389,7 +427,7 @@ func main() {
 		c.devInfo.DeviceVersion = "Kindle"
 	}
 	c.restoreThumbs()
-	conn, err := uc.New(c, *debug)
+	conn, err := findCalibre(c, *debug, searchTimeout)
 	if err != nil {
 		if errors.Is(err, uc.CalibreNotFound) {
 			log.Printf("calibre not found on the network")

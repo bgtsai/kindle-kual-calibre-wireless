@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless common.sh v0.4.0 — 各腳本共用的路徑與函式
+# calibre-wireless common.sh v0.6.0 — 各腳本共用的路徑與函式
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$BASE/calibre-wireless.conf"
@@ -21,9 +21,50 @@ log() {
     [ -n "$2" ] && echo "                     Chinese | $2" >> "$LOG"
 }
 
-# 螢幕提示（eips 不存在就略過）。第 2 個參數是列號，預設 2
+# ---- 螢幕提示：畫在畫面最底部，用完擦掉 ----
+# 為什麼在底部：頂端是 Kindle 的狀態列（時間、電量），訊息殘留在那裡最顯眼（使用者回報 2026-11-05）。
+# 為什麼要擦：eips/fbink 直接改畫面像素，Kindle 介面不知道，程式結束後字會一直留著，
+# 要等介面因為開書等動作重畫才被蓋掉。擦掉＝用空白（白底）蓋回去；原本那一列的介面內容
+# 要等介面下次重畫才會回來——沒有查到「只重畫、不切換畫面」的指令（KB 32 第 10 節）。
+# 第 2 個參數是第幾列，從底部算：1＝最底下一列（狀態），2＝它上面一列（進度）。
+# 優先用 FBInk（Universal Hotfix 會裝，支援負數列號＝從底部算、-r 右邊補空白蓋掉舊字）；
+# 沒有 FBInk 就退回 eips，eips 不能從底部算，只好畫在頂端第 2、3 列（v0.5.0 的位置）。
+NOTIFY_SLOTS="1 2"
+# 結束訊息停留幾秒再擦掉 (s)，讓使用者看得到最後一句
+NOTIFY_CLEAR_DELAY_S=4
+
+find_fbink() {
+    for f in /var/local/kmc/armhf/bin/fbink /var/local/kmc/armel/bin/fbink /mnt/us/libkh/bin/fbink "$(which fbink 2>/dev/null)"; do
+        [ -n "$f" ] && [ -x "$f" ] && { echo "$f"; return 0; }
+    done
+    return 1
+}
+FBINK="$(find_fbink)"
+
 notify() {
-    which eips >/dev/null 2>&1 && eips 2 "${2:-2}" "$1                              " >/dev/null 2>&1
+    slot="${2:-1}"
+    if [ -n "$FBINK" ]; then
+        "$FBINK" -q -y "-$slot" -r "$1" >/dev/null 2>&1
+    elif which eips >/dev/null 2>&1; then
+        eips 2 "$((slot + 1))" "$1                              " >/dev/null 2>&1
+    fi
+}
+
+# 擦掉所有提示列
+clear_notify() {
+    for slot in $NOTIFY_SLOTS; do
+        if [ -n "$FBINK" ]; then
+            "$FBINK" -q -y "-$slot" -r " " >/dev/null 2>&1
+        elif which eips >/dev/null 2>&1; then
+            eips 0 "$((slot + 1))" "                                                  " >/dev/null 2>&1
+        fi
+    done
+}
+
+# 顯示一句、過幾秒擦掉；背景執行，不拖住呼叫的人
+notify_brief() {
+    notify "$1" "$2"
+    ( sleep "$NOTIFY_CLEAR_DELAY_S"; clear_notify ) </dev/null >/dev/null 2>&1 &
 }
 
 # 連線階段是否正在跑

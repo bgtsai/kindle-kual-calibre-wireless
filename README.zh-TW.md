@@ -65,7 +65,7 @@ Kindle 磁碟（根目錄）
 
 1. calibre：**連線/分享 → 啟動無線裝置連線**。密碼**留空**（插件不會送密碼），埠號維持預設。做一次就好，calibre 會記住。
 2. Kindle：點書庫裡的 **Calibre 連線**，或 KUAL ▸ Calibre Wireless ▸ **連線到 calibre**。
-3. 畫面上方會出現狀態訊息：`turning on Wi-Fi…`、`searching for calibre…`、`connected`、`received 1/3`…
+3. 畫面**底部**會出現狀態訊息：`turning on Wi-Fi…`、`searching for calibre…`、`connected`、`received 1/3`…可以先在 Kindle 按連線、再去開 calibre——Kindle 會持續尋找最多 5 分鐘。
 4. calibre 裡會出現 **Wireless device: Kindle**，照平常傳書、刪書。
 5. 結束：在 calibre 按退出、再點一次書本／選單，或等它自動結束（見上方計時）。Kindle 會回到飛行模式並重新掃描書庫。
 
@@ -97,9 +97,24 @@ Calibre Wireless ▸
 1. 解除飛行模式，最多等 **60 秒** Wi-Fi 連上（等不到就放棄、回到飛行模式）。
 2. 連線期間在 Kindle 自己的防火牆（`iptables INPUT`）開一個口給 calibre 的回覆——只收**來自** calibre 那 5 個廣播埠的 UDP。
 3. 防止休眠（`com.lab126.powerd preventScreenSaver`）。
-4. 廣播尋找 calibre（剛開機時 `255.255.255.255` 送不出去的話，改用你網段的廣播位址，例如 `192.168.1.255`），再用 TCP 跟它連線。
+4. 廣播尋找 calibre，每幾秒重試一次、最多 **5 分鐘**（剛開機時 `255.255.255.255` 送不出去的話，改用你網段的廣播位址，例如 `192.168.1.255`），再用 TCP 跟它連線。
 5. 連線中斷（多半是 Kindle 休眠了）就等 Wi-Fi 回來再重連，最多 3 次。
-6. 結束時不管原因：恢復休眠、移除防火牆規則、回到飛行模式、重新掃描書庫。
+6. 結束時不管原因：恢復休眠、移除防火牆規則、回到飛行模式、重新掃描書庫。最後一句訊息停留 4 秒，然後把提示列擦掉。
+
+### 各步驟等多久
+
+下表任何一種情況結束連線，Kindle 都會回到飛行模式。
+
+| 步驟 | 時間 | 時間到了會怎樣 |
+| --- | --- | --- |
+| 等 Wi-Fi 連上 | **60 秒** | 放棄：`Wi-Fi not connected, gave up` |
+| 尋找 calibre | **5 分鐘**（每幾秒重試一次） | 放棄：`calibre not found on network` |
+| 連上了，但一直沒傳書 | **5 分鐘** | 斷線 |
+| 最後一本傳完（或刪完書）之後 | 閒置 **3 分鐘** | 斷線。每傳一本或刪一本，都會重新倒數 3 分鐘。 |
+| 在 calibre 按退出 | 立即 | 斷線 |
+| 連線中斷（例如 Kindle 休眠） | 最多重連 **3** 次，每次等 Wi-Fi 60 秒 | 放棄：`connection lost, gave up` |
+
+等待時間只算醒著的時間：休眠期間不會用掉。另外兩個時間限制來自 UNCaGED 函式庫，平常碰不到：calibre 60 秒完全沒回應算連線中斷；傳一本書每 100 KB 給 2 秒。5 分鐘、3 分鐘（和搜尋時間）是程式的啟動參數（`-search-timeout`、`-no-book-timeout`、`-idle-timeout`），選單沒有提供修改。
 
 ## 會產生的檔案
 
@@ -135,7 +150,8 @@ Calibre Wireless ▸
 
 ## 已知限制
 
-- **畫面訊息是英文**：Kindle 的 `eips` 只能畫 ASCII。
+- **畫面訊息是英文**：訊息是直接畫在螢幕上的（FBInk，沒裝 Universal Hotfix 時用 `eips`），這裡只能畫 ASCII。
+- **擦掉後會留一條空白，等 Kindle 重畫才恢復**：訊息改的是螢幕像素，Kindle 介面不知道。結束時會擦掉，但那幾列原本的介面內容（例如閱讀進度那一行）要等介面重畫（翻頁、開書）才會回來。沒有查到能讓介面「只重畫、不切換畫面」的指令。沒裝 Universal Hotfix（沒有 FBInk）時，訊息改顯示在靠近頂端的位置，因為 `eips` 不能從底部算列數。
 - **Kindle 的時鐘**如果長期在飛行模式、從不對時，可能是錯的，所以 log 的時間會不準。傳書不受影響。
 - **KFX 檔**還沒有首頁縮圖。
 - **更新會重設設定**：蓋過新 zip 會覆蓋 `calibre-wireless.conf`。

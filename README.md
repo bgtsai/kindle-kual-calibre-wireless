@@ -65,7 +65,7 @@ Common mistakes:
 
 1. In calibre: **Connect/share → Start wireless device connection**. Leave the password **empty** (the extension doesn't send one) and keep the default port. Do this once; calibre remembers it.
 2. On the Kindle: tap **Calibre 連線** in the library, or KUAL ▸ Calibre Wireless ▸ **連線到 calibre** (Connect).
-3. Status messages appear at the top of the screen: `turning on Wi-Fi…`, `searching for calibre…`, `connected`, `received 1/3`…
+3. Status messages appear at the **bottom** of the screen: `turning on Wi-Fi…`, `searching for calibre…`, `connected`, `received 1/3`… You can tap connect first and start calibre afterwards — the Kindle keeps looking for up to 5 minutes.
 4. In calibre the Kindle appears as **Wireless device: Kindle**. Send and delete books as usual.
 5. To end: eject it in calibre, tap the book / menu item again, or just wait (see the timers above). The Kindle goes back to airplane mode and rescans the library.
 
@@ -97,9 +97,24 @@ Calibre Wireless ▸
 1. Airplane mode off; waits up to **60 s** for Wi-Fi to connect (otherwise gives up and goes back to airplane mode).
 2. Opens the Kindle's own firewall (`iptables INPUT`) for calibre's reply — UDP coming **from** calibre's 5 broadcast ports only — for as long as the session runs.
 3. Blocks sleep (`com.lab126.powerd preventScreenSaver`).
-4. Broadcasts to find calibre (falls back to your subnet's broadcast address, e.g. `192.168.1.255`, if `255.255.255.255` fails right after boot), then talks to it over TCP.
+4. Broadcasts to find calibre, again every few seconds for up to **5 minutes** (falls back to your subnet's broadcast address, e.g. `192.168.1.255`, if `255.255.255.255` fails right after boot), then talks to it over TCP.
 5. If the connection drops (usually because the Kindle slept), waits for Wi-Fi to come back and reconnects — up to 3 times.
-6. At the end, whatever the reason: sleep allowed again, firewall rule removed, airplane mode on, library rescan.
+6. At the end, whatever the reason: sleep allowed again, firewall rule removed, airplane mode on, library rescan. The last message stays for 4 seconds, then the message lines are wiped.
+
+### How long each step waits
+
+Whenever a session ends — for any reason in this table — the Kindle goes back to airplane mode.
+
+| Step | Time | When it runs out |
+| --- | --- | --- |
+| Waiting for Wi-Fi to connect | **60 s** | Gives up: `Wi-Fi not connected, gave up` |
+| Looking for calibre | **5 min** (retried every few seconds) | Gives up: `calibre not found on network` |
+| Connected, but no book arrives | **5 min** | Disconnects |
+| After the last book (or a delete) | **3 min** idle | Disconnects. Every new book or delete starts the 3 minutes again. |
+| You eject the Kindle in calibre | immediately | Disconnects |
+| Connection lost (e.g. the Kindle slept) | up to **3** reconnects, each waiting 60 s for Wi-Fi | Gives up: `connection lost, gave up` |
+
+Waiting times count only while the Kindle is awake: time spent asleep doesn't use them up. Two more limits come from the UNCaGED library and normally never matter: calibre silent for 60 s counts as a lost connection, and a book gets 2 s per 100 KB to arrive. The 5- and 3-minute values (and the search time) are start options of the program (`-search-timeout`, `-no-book-timeout`, `-idle-timeout`); there is no menu item for them.
 
 ## Files it creates
 
@@ -135,7 +150,8 @@ Lines with `-` in the date come from the shell scripts and are written twice: En
 
 ## Known limitations
 
-- **The on-screen messages are English**: the Kindle's `eips` tool only draws ASCII.
+- **The on-screen messages are English**: they are drawn directly on the screen (FBInk, or `eips` without the Universal Hotfix), which only does ASCII here.
+- **Wiped messages leave a blank line until the Kindle redraws**: the messages replace screen pixels the Kindle's own interface doesn't know about. They are wiped at the end, but whatever the interface showed in those lines (e.g. the reading progress line) only comes back when it redraws (turning a page, opening a book). No command was found that makes the interface redraw without switching screens. Without the Universal Hotfix (no FBInk), messages are shown near the top instead, because `eips` can't count rows from the bottom.
 - **The Kindle's clock** may be wrong if it is always in airplane mode (it never syncs), so log times can be off. Transfers are not affected.
 - **KFX files**: no home-screen thumbnail yet.
 - **Settings reset on update**: copying a new zip overwrites `calibre-wireless.conf`.
