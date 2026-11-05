@@ -20,7 +20,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/longbridgeapp/opencc"
+	"github.com/bgtsai/kindle-kual-calibre-wireless/zhconv"
 	"github.com/shermp/UNCaGED/uc"
 )
 
@@ -70,12 +70,12 @@ func loadConfig(path string) Config {
 // newConverter returns the OpenCC converter for the setting, or nil for "original".
 // s2tw / tw2s convert characters with Taiwan standard forms but do NOT swap
 // vocabulary (s2twp would turn 鼠标 into 滑鼠) — book titles should keep their words.
-func newConverter(mode string) *opencc.OpenCC {
+func newConverter(mode string) *zhconv.Converter {
 	conv := map[string]string{"traditional": "s2tw", "simplified": "tw2s"}[mode]
 	if conv == "" {
 		return nil
 	}
-	cc, err := opencc.New(conv)
+	cc, err := zhconv.New(conv)
 	if err != nil {
 		log.Printf("opencc %s: %v (file names keep calibre's script)", conv, err)
 		return nil

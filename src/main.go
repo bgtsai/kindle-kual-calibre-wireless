@@ -29,7 +29,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/longbridgeapp/opencc"
+	"github.com/bgtsai/kindle-kual-calibre-wireless/zhconv"
 	"github.com/shermp/UNCaGED/uc"
 )
 
@@ -46,7 +46,7 @@ type client struct {
 	books         []uc.CalibreBookMeta
 	files         map[string]string // calibre lpath → file name in bookDir (see naming.go)
 	cfg           Config
-	conv          *opencc.OpenCC // nil = keep calibre's script
+	conv          *zhconv.Converter // nil = keep calibre's script
 	devInfo       uc.DeviceInfo
 	exitChan      chan<- bool
 	idle          *idleTimer
@@ -389,8 +389,8 @@ func (c *client) SetExitChannel(ch chan<- bool) {
 }
 
 func main() {
-	// Own FlagSet: the opencc package registers a global "-dir" flag in its init(),
-	// which made the default FlagSet panic with "flag redefined: dir".
+	// Own FlagSet: the OpenCC package used up to v0.8.0 registered a global "-dir" flag in
+	// its init() ("flag redefined: dir"). Kept so a future dependency can't do that again.
 	flag := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	dir := flag.String("dir", "/mnt/us/documents", "where received books are stored")
 	stateFile := flag.String("state", "", "metadata state file (default: <dir>/.calibre-wireless.json)")

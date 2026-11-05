@@ -229,8 +229,8 @@ cd src && GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflag
 - calibre [`smart_device_app/driver.py`](https://github.com/kovidgoyal/calibre/blob/master/src/calibre/devices/smart_device_app/driver.py)（協定、廣播埠）與 [`kindle/driver.py`](https://github.com/kovidgoyal/calibre/blob/master/src/calibre/devices/kindle/driver.py)（縮圖檔名、封面尺寸）
 - KOReader [`platform/kindle/koreader.sh`](https://github.com/koreader/koreader/blob/master/platform/kindle/koreader.sh)（為 calibre 的回覆開 Kindle 的防火牆）
 - [KindleModding – Scriptlets](https://kindlemodding.org/kindle-dev/scriptlets.html)（`documents/*.sh` 書本）與 [KindleModding/Hotfix](https://github.com/KindleModding/Hotfix)
-- [OpenCC](https://github.com/longbridgeapp/opencc)（檔名的繁簡轉換）
+- [OpenCC](https://github.com/BYVoid/OpenCC) 的字典（檔名的繁簡轉換）
 
 ## 授權
 
-GPL-3.0（UNCaGED 是 GPL-3.0）。
+GPL-3.0，見 [LICENSE](LICENSE)。程式裡包含 UNCaGED（GPL-3.0）、pyfmt（BSD-3-Clause）與 OpenCC 字典（Apache-2.0），細節與授權全文見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和 [licenses/](licenses/)。Release 的 zip 裡 `extensions/calibre-wireless/` 也附了同樣的檔案。

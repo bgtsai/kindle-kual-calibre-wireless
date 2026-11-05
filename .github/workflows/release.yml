@@ -57,6 +57,9 @@ jobs:
         if: steps.check.outputs.exists != '1'
         run: |
           chmod 755 kindle/extensions/calibre-wireless/bin/*
+          # 授權文字隨二進位檔一起散布（GPL-3.0、Apache-2.0、BSD-3-Clause 都要求）
+          E=kindle/extensions/calibre-wireless
+          cp LICENSE THIRD_PARTY_NOTICES.md $E/ && mkdir -p $E/licenses && cp licenses/* $E/licenses/
           cd kindle && zip -r ../calibre-wireless.zip extensions $( [ -d documents ] && echo documents )
 
       - name: Create release

@@ -229,8 +229,8 @@ Then zip the contents of `kindle/`. GitHub Actions does exactly this when the ve
 - calibre [`smart_device_app/driver.py`](https://github.com/kovidgoyal/calibre/blob/master/src/calibre/devices/smart_device_app/driver.py) (protocol, broadcast ports) and [`kindle/driver.py`](https://github.com/kovidgoyal/calibre/blob/master/src/calibre/devices/kindle/driver.py) (thumbnail names, cover size)
 - KOReader [`platform/kindle/koreader.sh`](https://github.com/koreader/koreader/blob/master/platform/kindle/koreader.sh) (opening the Kindle's firewall for calibre's reply)
 - [KindleModding – Scriptlets](https://kindlemodding.org/kindle-dev/scriptlets.html) (`documents/*.sh` books) and [KindleModding/Hotfix](https://github.com/KindleModding/Hotfix)
-- [OpenCC](https://github.com/longbridgeapp/opencc) (Traditional / Simplified conversion of file names)
+- [OpenCC](https://github.com/BYVoid/OpenCC) dictionaries (Traditional / Simplified conversion of file names)
 
 ## License
 
-GPL-3.0 (UNCaGED is GPL-3.0).
+GPL-3.0, see [LICENSE](LICENSE). The program includes UNCaGED (GPL-3.0), pyfmt (BSD-3-Clause) and the OpenCC dictionaries (Apache-2.0); details and license texts in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [licenses/](licenses/). The Release zip contains the same files in `extensions/calibre-wireless/`.
