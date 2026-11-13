@@ -84,6 +84,7 @@ calibre-debug test/calibre_server.py -- book1.azw3 book2.azw3 &   # headless cal
 - KUAL: one top-level item, everything in its submenu (connect/disconnect, `檔名：繁體/簡體/原樣` toggle, diagnose). Settings live only in `calibre-wireless.conf`; the menu just shows/rewrites it.
 - Scriptlet book button in `documents/` (needs the Universal Hotfix sh_integration, which the user has — KOReader shows up as a book): connect/disconnect only; its title can't change, so status is shown as on-screen messages.
 - Connect: leave airplane mode, wait for Wi-Fi, give up after 60 s. Disconnect (any reason) → back to airplane mode.
+- **Bluetooth must never be switched off or on by this extension (user, 2026-11-14)**: the page turner (kindle-hid-passthrough) does not reconnect by itself and has to be re-paired in its app. Switching airplane mode always switches Bluetooth on this Kindle, so the line above is to be replaced by Wi-Fi-only switching once the v0.14.0 test shows how.
 - Auto-disconnect: 5 min after connecting with no book; 3 min idle after the last book (`totalBooks`); calibre eject ends immediately.
 - Prevent sleep while connected; if it sleeps anyway, reconnect after wake. Cover thumbnails are required.
 - Works with bgtsai/kindle-kual-firewall ≥ v1.9 (allows UDP to 255.255.255.255 on calibre's 5 broadcast ports). The INPUT-side UDP reply port is opened by this extension only while connected (like KOReader's `koreader.sh`).
