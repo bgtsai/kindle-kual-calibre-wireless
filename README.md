@@ -87,7 +87,7 @@ Calibre Wireless ▸
     置頂 Calibre 連線（開／關）：開
     KUAL 放最後（開／關）：開
     Diagnose (write diagnose.txt)
-    錄連線事件（60 秒，查 VoiceView）
+    錄連線事件（120 秒，查 VoiceView）
 ```
 
 | Item (the part in brackets lists the choices, after the colon is the current one) | What it does |
@@ -97,7 +97,7 @@ Calibre Wireless ▸
 | **置頂 Calibre 連線（開／關）：…** | Keeps the **Calibre 連線** book first in the library's "Recent" sort. When a connection ends, its last-opened time is set to now + `pin_days` days (default 365, in `calibre-wireless.conf`), so books you open in the meantime stay below it; each connection renews it. Turning it on applies it at once. Turning it off only stops the change (the old time isn't restored). |
 | **KUAL 放最後（開／關）：…** | When a connection ends, sets KUAL's last-opened time to 2000-01-01 so it sorts last in "Recent". KUAL moves itself to the top again whenever it is opened, so it goes back to the bottom at the next connection end. |
 | **Diagnose** | Writes system information to `diagnose.txt` (read-only, changes nothing). Then, for 2 minutes in the background, records power and Wi-Fi events to `diagnose_events.txt` — put the Kindle to sleep and wake it once, then turn Wi-Fi off and on during that time. It also appends a read-only query of the library database (`/var/local/cc.db`, queried on a copy in `/tmp`) to `diagnose_ccdb.txt`, lists the system fonts and which message font is usable, and copies the library service's scripts (`/usr/lib/ccat/*.lua`) to `diagnose_ccat/` (the session token is only reported as present/absent, never copied). Used for troubleshooting and for adapting the extension to another model. |
-| **錄連線事件（60 秒，查 VoiceView）** | Read-only. For 60 seconds, records the Kindle's Bluetooth / VoiceView / UI service events (lipc) with times to `diagnose_connect_events.txt`; tap **Calibre 連線** during that time. Used to find which connection step makes the VoiceView dialog appear. |
+| **錄連線事件（120 秒，查 VoiceView）** | Read-only. For 120 seconds, records the Kindle's Bluetooth / Wi-Fi / UI service events (lipc) and, every second, the airplane / Wi-Fi / Bluetooth state, with times, to `diagnose_connect_events.txt`. During that time: turn airplane mode off and on by hand, then tap **Calibre 連線**. Used to find which connection step makes the VoiceView dialog appear. |
 
 ## What happens during a session
 

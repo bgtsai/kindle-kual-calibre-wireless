@@ -87,7 +87,7 @@ Calibre Wireless ▸
     置頂 Calibre 連線（開／關）：開
     KUAL 放最後（開／關）：開
     Diagnose (write diagnose.txt)
-    錄連線事件（60 秒，查 VoiceView）
+    錄連線事件（120 秒，查 VoiceView）
 ```
 
 | 項目（括號裡是可切換的狀態，冒號後是目前的狀態） | 作用 |
@@ -97,7 +97,7 @@ Calibre Wireless ▸
 | **置頂 Calibre 連線（開／關）：…** | 讓書庫「最近」排序裡的 **Calibre 連線** 永遠排第一。每次連線結束時，把它的上次開啟時間設成「現在 + `pin_days` 天」（預設 365，在 `calibre-wireless.conf`），這段期間你打開的書都排在它下面；每連線一次就續期。打開時立刻套用一次。關掉只是不再改，不會還原原本的時間。 |
 | **KUAL 放最後（開／關）：…** | 每次連線結束時，把 KUAL 的上次開啟時間設成 2000-01-01，讓它排在「最近」的最後。KUAL 每次被打開都會把自己移回最前面，要到下次連線結束才會再放回最後。 |
 | **Diagnose** | 把系統資訊寫到 `diagnose.txt`（只讀，不改任何東西）。接著在背景錄 2 分鐘電源與 Wi-Fi 事件到 `diagnose_events.txt`——這段時間內讓 Kindle 休眠再喚醒一次，然後把 Wi-Fi 關掉再打開。另外會把書庫資料庫（`/var/local/cc.db`，複製到 `/tmp` 後查複本）的只讀查詢結果附加到 `diagnose_ccdb.txt`、列出系統字型與哪個訊息字型能用，並把書庫服務的程式（`/usr/lib/ccat/*.lua`）複製到 `diagnose_ccat/`（驗證金鑰只記錄有沒有，不複製內容）。用來排查問題，或改成適合其他機型。 |
-| **錄連線事件（60 秒，查 VoiceView）** | 只讀。接下來 60 秒，把 Kindle 藍牙／VoiceView／介面服務的 lipc 事件連同時間記到 `diagnose_connect_events.txt`；這段時間內去點 **Calibre 連線**。用來找出是連線的哪一步讓 VoiceView 視窗跳出來。 |
+| **錄連線事件（120 秒，查 VoiceView）** | 只讀。接下來 120 秒，把 Kindle 藍牙／Wi-Fi／介面服務的 lipc 事件，以及每秒的飛航／Wi-Fi／藍牙狀態，連同時間記到 `diagnose_connect_events.txt`。這段時間內：先手動關掉再打開飛航模式，然後點 **Calibre 連線**。用來找出是連線的哪一步讓 VoiceView 視窗跳出來。 |
 
 ## 一次連線會做什麼
 

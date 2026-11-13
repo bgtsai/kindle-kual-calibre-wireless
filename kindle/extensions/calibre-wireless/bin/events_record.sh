@@ -1,19 +1,21 @@
 #!/bin/sh
-# calibre-wireless events_record.sh v0.12.0 — 唯讀，不改任何設定
+# calibre-wireless events_record.sh v0.13.0 — 唯讀，不改任何設定
 # 查「按連線就跳出 VoiceView 視窗」（2026-11-14 使用者回報；手動解除飛航模式不會跳，v0.9.3 也會跳
 # → 裝置狀態變了，觸發點在我們連線流程裡的某一步）。按下後背景錄 EVENT_RECORD_S 秒，
 # 這段時間內使用者去點「Calibre 連線」，把藍牙／VoiceView／介面相關服務的 lipc 事件連同時間記下來，
 # 再對照 calibre-wireless.log 每一步的時間，就知道視窗是在哪一步之後出現的。
+# v0.13.0：使用者手動切換飛航模式不會動到藍牙，我們用 wirelessEnable 切換會（藍牙跟著關開）
+# → 同一次錄製裡先手動切一次、再用「Calibre 連線」走一次，比對介面多做了什麼。
 # 結果：extensions/calibre-wireless/diagnose_connect_events.txt
 . "$(dirname "$0")/common.sh"
 
 OUT="$BASE/diagnose_connect_events.txt"
 # 錄多久 (s)
-EVENT_RECORD_S=60
+EVENT_RECORD_S=120
 # 輪詢 Wi-Fi／飛航狀態的間隔 (s)
 POLL_S=1
 # 要錄的服務：名稱猜的，不存在的 lipc-wait-event 會馬上失敗、錯誤照記（下面的服務清單會列出實際有哪些）
-PUBLISHERS="com.lab126.btfd com.lab126.bluetooth com.lab126.voiceview com.lab126.accessibility com.lab126.pillow com.lab126.appmgrd com.lab126.cmd com.lab126.wifid com.lab126.powerd com.lab126.tts com.lab126.audio"
+PUBLISHERS="com.lab126.btfd com.lab126.btmd com.lzampier.btmanager com.lab126.quickactions com.lab126.bluetooth com.lab126.voiceview com.lab126.accessibility com.lab126.pillow com.lab126.appmgrd com.lab126.cmd com.lab126.wifid com.lab126.powerd com.lab126.tts com.lab126.audio"
 
 ts() { date '+%H:%M:%S'; }
 
@@ -22,8 +24,9 @@ if timeout -t 1 true 2>/dev/null; then TO="timeout -t"; else TO="timeout"; fi
 
 (
     {
-        echo "calibre-wireless connect events v0.12.0  start $(date)  (date +%s = $(date +%s))"
-        echo "Within ${EVENT_RECORD_S}s: tap 'Calibre 連線' (book or KUAL), note when the VoiceView dialog appears."
+        echo "calibre-wireless connect events v0.13.0  start $(date)  (date +%s = $(date +%s))"
+        echo "Within ${EVENT_RECORD_S}s: turn airplane mode OFF by hand, wait for Wi-Fi, turn it ON by hand,"
+        echo "then tap 'Calibre 連線' and let the session run/end. Note when the VoiceView dialog appears."
         echo
         echo "===== lipc publishers (lipc-probe -l / -a) ====="
         lipc-probe -l 2>&1 | head -n 200
@@ -46,7 +49,8 @@ if timeout -t 1 true 2>/dev/null; then TO="timeout -t"; else TO="timeout"; fi
     n=$((EVENT_RECORD_S / POLL_S))
     last=""
     while [ "$n" -gt 0 ]; do
-        now="poll wirelessEnable=$(lipc-get-prop com.lab126.cmd wirelessEnable 2>&1) cmState=$(lipc-get-prop com.lab126.wifid cmState 2>&1) session=$(session_running && echo running || echo stopped)"
+        # 藍牙狀態值也每秒記：上一次錄製 btfd 一個事件都沒發，只看事件看不出藍牙有沒有被關
+        now="poll wirelessEnable=$(lipc-get-prop com.lab126.cmd wirelessEnable 2>&1) wifid.enable=$(lipc-get-prop com.lab126.wifid enable 2>&1) cmState=$(lipc-get-prop com.lab126.wifid cmState 2>&1) BTstate=$(lipc-get-prop com.lab126.btfd BTstate 2>&1) BTmode=$(lipc-get-prop com.lab126.btfd currentBTOperatingMode 2>&1) session=$(session_running && echo running || echo stopped)"
         [ "$now" != "$last" ] && echo "$(ts) $now" >> "$OUT"
         last="$now"
         sleep "$POLL_S"
@@ -69,4 +73,4 @@ if timeout -t 1 true 2>/dev/null; then TO="timeout -t"; else TO="timeout"; fi
     notify_brief "calibre-wireless: connect events recorded" "calibre-wireless：連線事件錄好了"
 ) </dev/null >/dev/null 2>&1 &
 
-notify "Recording ${EVENT_RECORD_S}s: now tap Calibre connect" "錄事件 ${EVENT_RECORD_S} 秒：現在去點「Calibre 連線」"
+notify "Recording ${EVENT_RECORD_S}s: toggle airplane by hand, then Calibre connect" "錄事件 ${EVENT_RECORD_S} 秒：先手動切飛航模式，再點「Calibre 連線」"

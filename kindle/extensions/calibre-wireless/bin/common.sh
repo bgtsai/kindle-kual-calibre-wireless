@@ -308,7 +308,7 @@ render_menu() {
         { "name": "$pin", "priority": 3, "action": "./bin/pin_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "$kual", "priority": 4, "action": "./bin/kual_last_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "Diagnose (write diagnose.txt)", "priority": 5, "action": "./bin/diagnose.sh" },
-        { "name": "錄連線事件（60 秒，查 VoiceView）", "priority": 6, "action": "./bin/events_record.sh" }
+        { "name": "錄連線事件（120 秒，查 VoiceView）", "priority": 6, "action": "./bin/events_record.sh" }
       ]
     }
   ]
