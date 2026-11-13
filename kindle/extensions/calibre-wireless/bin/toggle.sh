@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless toggle.sh v0.12.0
+# calibre-wireless toggle.sh v0.14.0
 # KUAL「連線／斷線」與書本按鈕共用：沒在連線 → 背景啟動 session.sh；連線中 → 結束它。
 # 一定要馬上返回：KUAL 與 scriptlet 會等腳本結束，連線階段要跑好幾分鐘。
 . "$(dirname "$0")/common.sh"
@@ -13,6 +13,8 @@ if session_running; then
 fi
 
 rm -f "$PIDFILE"
+# 按下的當下就先畫第一句（v0.14.0）：不等背景的 session.sh 啟動，畫面不會有空檔
+status_set "calibre: turning on Wi-Fi..." "calibre：開啟 Wi-Fi 中…"
 # </dev/null 與輸出導走：KUAL 結束後背景程序不能綁著它的終端
 sh "$BASE/bin/session.sh" </dev/null >/dev/null 2>&1 &
 echo $! > "$PIDFILE"

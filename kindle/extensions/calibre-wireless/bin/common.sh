@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless common.sh v0.12.0 — 各腳本共用的路徑與函式
+# calibre-wireless common.sh v0.14.0 — 各腳本共用的路徑與函式
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$BASE/calibre-wireless.conf"
@@ -185,7 +185,12 @@ notify_brief() {
 # 狀態一律畫在最底下一列（slot 1）。
 STATUS_FILE="/tmp/calibre-wireless.status"
 # 重畫間隔 (s)：太短電子紙會一直局部更新，太長被蓋掉後空白太久
-STATUS_REDRAW_S=5
+# v0.14.0：5 → 3，另外介面一重畫就補畫（status_event_redraw），定時重畫只是備援
+STATUS_REDRAW_S=3
+# 連線結束後最後一句停留多久 (s)、期間每秒重畫：結束時書庫會重新啟動、蓋掉底部（v0.13.0 錄到
+# booklet.home appStarted 在開回飛航後約 2 秒），v0.12.0 只留 4 秒又 5 秒才重畫一次，常常回不來
+FINAL_HOLD_S=6
+STATUS_EV_FIFO="/tmp/calibre-wireless.ev.fifo"
 
 # 設定並立刻畫出目前狀態：status_set "<英文>" "<中文>"
 status_set() {
@@ -193,13 +198,41 @@ status_set() {
     notify "$1" "$2"
 }
 
+# 把目前狀態再畫一次（沒有狀態檔就不畫）
+status_redraw() {
+    [ -f "$STATUS_FILE" ] || return 0
+    notify "$(sed -n 1p "$STATUS_FILE")" "$(sed -n 2p "$STATUS_FILE")"
+}
+
 # 背景重畫迴圈；STATUS_FILE 被刪掉就結束（session.sh 收尾時刪）
 status_redraw_loop() {
     while [ -f "$STATUS_FILE" ]; do
         sleep "$STATUS_REDRAW_S"
-        [ -f "$STATUS_FILE" ] || break
-        notify "$(sed -n 1p "$STATUS_FILE")" "$(sed -n 2p "$STATUS_FILE")"
+        status_redraw
     done
+}
+
+# 介面一重畫就補畫（v0.14.0）：書庫或其他程式被帶到前面、介面框架（pillow）重新啟動時，
+# Kindle 會重畫整個畫面、蓋掉底部的字（v0.13.0 錄到：按書本按鈕後 booklet.home appStarted、
+# 連線途中 pillow pillowReady）。收到這些事件後等 1 秒（讓介面先畫完）再補畫。
+# 背景啟動兩個 lipc-wait-event，輸出接到同一個 FIFO；回傳 "<讀取端 pid> <等待者 pid…>"，
+# 收尾時只殺這幾個——不能 killall lipc-wait-event（防火牆插件的背景程序也在用）。
+status_event_redraw_start() {
+    rm -f "$STATUS_EV_FIFO"
+    mkfifo "$STATUS_EV_FIFO" 2>>"$LOG" || return 1
+    (
+        while IFS= read -r l; do
+            case "$l" in
+                *appStarted*|*"appActivating 1"*|*pillowReady*) sleep 1; status_redraw ;;
+            esac
+        done < "$STATUS_EV_FIFO"
+    ) </dev/null >/dev/null 2>&1 &
+    pids="$!"
+    for pub in com.lab126.appmgrd com.lab126.pillow; do
+        lipc-wait-event -m -s 0 "$pub" '*' > "$STATUS_EV_FIFO" 2>/dev/null &
+        pids="$pids $!"
+    done
+    echo "$pids"
 }
 
 # 連線階段是否正在跑
@@ -308,7 +341,8 @@ render_menu() {
         { "name": "$pin", "priority": 3, "action": "./bin/pin_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "$kual", "priority": 4, "action": "./bin/kual_last_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "Diagnose (write diagnose.txt)", "priority": 5, "action": "./bin/diagnose.sh" },
-        { "name": "錄連線事件（120 秒，查 VoiceView）", "priority": 6, "action": "./bin/events_record.sh" }
+        { "name": "錄連線事件（120 秒，查 VoiceView）", "priority": 6, "action": "./bin/events_record.sh" },
+        { "name": "測試：只開 Wi-Fi（不動飛航模式）", "priority": 7, "action": "./bin/wifi_only_test.sh" }
       ]
     }
   ]

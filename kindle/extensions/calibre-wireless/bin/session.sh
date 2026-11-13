@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless session.sh v0.12.0
+# calibre-wireless session.sh v0.14.0
 # 一次連線階段，由 toggle.sh 在背景啟動（單一實例：toggle.sh 寫 $PIDFILE）。
 #   解除飛行模式 → 等 Wi-Fi 連上（最多 WIFI_WAIT_S）→ 開 INPUT 讓 calibre 的廣播回覆進來
 #   → 防休眠 → 跑 Go client → 結束（任何原因）一律：恢復休眠、關 INPUT、回飛行模式、掃描書庫。
@@ -28,6 +28,7 @@ IPTABLES_RETRY_S=1
 cpid=""
 rpid=""
 spid=""
+evpids=""
 final_msg=""
 stopping=0
 
@@ -125,10 +126,18 @@ cleanup() {
     log "Session ended, airplane mode on" "連線結束，已回到飛行模式"
     # 失敗的原因（找不到 calibre、Wi-Fi 連不上…）留著給使用者看，不蓋成「已斷線」
     [ -n "$final_msg" ] || status_set "calibre: disconnected, airplane mode on" "calibre：已斷線，回到飛行模式"
-    # 最後一句訊息留幾秒讓使用者看到（重畫迴圈還在跑），再停掉重畫、把提示列擦掉
-    sleep "$NOTIFY_CLEAR_DELAY_S"
+    # 最後一句留 FINAL_HOLD_S 秒、每秒重畫（結束時書庫會重新啟動蓋掉它），再停掉所有重畫、擦掉
+    i=0
+    while [ "$i" -lt "$FINAL_HOLD_S" ]; do
+        sleep 1
+        status_redraw
+        i=$((i + 1))
+    done
     rm -f "$STATUS_FILE"
     [ -n "$spid" ] && kill "$spid" 2>/dev/null
+    # 先殺等待者（讀取端隨之讀到 EOF 結束），再保險殺讀取端
+    [ -n "$evpids" ] && kill $evpids 2>/dev/null
+    rm -f "$STATUS_EV_FIFO"
     clear_notify
 }
 
@@ -180,6 +189,7 @@ render_menu
 status_set "calibre: turning on Wi-Fi..." "calibre：開啟 Wi-Fi 中…"
 status_redraw_loop </dev/null >/dev/null 2>&1 &
 spid=$!
+evpids="$(status_event_redraw_start)"
 lipc-set-prop -i com.lab126.cmd wirelessEnable 1 2>>"$LOG"
 
 tries=0
