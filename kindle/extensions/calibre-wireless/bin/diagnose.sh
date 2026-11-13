@@ -1,11 +1,13 @@
 #!/bin/sh
-# calibre-wireless diagnose.sh v0.9.2 — 唯讀，不改任何設定
+# calibre-wireless diagnose.sh v0.9.3 — 唯讀，不改任何設定
 # 結果寫到使用者區（USB 拿得到）：
 #   extensions/calibre-wireless/diagnose.txt         一次性的系統資訊
 #   extensions/calibre-wireless/diagnose_events.txt  按下後 EVENT_RECORD_S 秒內的 powerd／wifid／cmd 事件
 #     （這段時間內：讓 Kindle 休眠再喚醒一次、切一次 Wi-Fi，才錄得到喚醒與連線事件）
 #   extensions/calibre-wireless/diagnose_ccdb.txt    書庫資料庫 cc.db 的查詢結果，每按一次「附加」一段，
 #     點「Calibre 連線」前後各按一次，就能比對它的上次存取時間怎麼變（v0.9.2）
+#   extensions/calibre-wireless/diagnose_ccat/        /usr/lib/ccat 的 .lua 複本（書庫服務的 9101 介面怎麼處理
+#     change 要求，要讀 change.lua 才知道能不能改上次存取時間；v0.9.3）
 # 用途：確認 session.sh 裡尚未在 5.13.5 實機驗證的指令（防休眠 preventScreenSaver、
 # 書庫掃描 doFullScan）與喚醒事件的名稱。
 . "$(dirname "$0")/common.sh"
@@ -20,7 +22,7 @@ POLL_S=3
 section() { echo; echo "===== $1 ====="; }
 
 {
-    echo "calibre-wireless diagnose v0.9.2  $(date)"
+    echo "calibre-wireless diagnose v0.9.3  $(date)"
 
     section "firmware / kernel"
     cat /etc/prettyversion.txt 2>&1
@@ -28,7 +30,7 @@ section() { echo; echo "===== $1 ====="; }
     uname -a 2>&1
 
     section "tools"
-    for t in lipc-get-prop lipc-set-prop lipc-wait-event lipc-probe eips fbink iptables mkfifo timeout ntpdate ntpd hwclock sqlite3 inotifyd; do
+    for t in lipc-get-prop lipc-set-prop lipc-wait-event lipc-probe eips fbink iptables mkfifo timeout ntpdate ntpd hwclock sqlite3 inotifyd curl wget netstat; do
         printf '%s: ' "$t"; which "$t" 2>/dev/null || echo "(not found)"
     done
     printf 'client: '; ls -l "$CLIENT" 2>&1
@@ -121,6 +123,22 @@ CCDB_OUT="$BASE/diagnose_ccdb.txt"
         rm -rf "$CCDB_COPY"
     fi
 } >> "$CCDB_OUT" 2>&1
+
+# ---- 書庫服務 com.lab126.ccat 的本機介面（127.0.0.1:9101/change，LibrarianSync 用）：只讀 ----
+# 只複製 /usr/lib/ccat 的 .lua 給人讀；/tmp/session_token 是當次的驗證金鑰，只記錄有沒有、幾個字，不寫出內容。
+CCAT_OUT="$BASE/diagnose_ccat"
+rm -rf "$CCAT_OUT"; mkdir -p "$CCAT_OUT"
+{
+    echo "ccat $(date)"
+    echo "--- ls -lR /usr/lib/ccat"; ls -lR /usr/lib/ccat 2>&1
+    echo "--- /tmp/session_token"
+    if [ -f /tmp/session_token ]; then echo "present, $(wc -c < /tmp/session_token) bytes"; else echo "absent"; fi
+    echo "--- listening on 9101"; netstat -ltn 2>&1 | grep -E '9101|Proto' || echo "(no 9101 line)"
+    echo "--- ps (ccat)"; ps 2>&1 | grep -i ccat | grep -v grep
+} > "$CCAT_OUT/ccat.txt" 2>&1
+for f in $(find /usr/lib/ccat -name '*.lua' 2>/dev/null); do
+    cp "$f" "$CCAT_OUT/$(echo "${f#/usr/lib/ccat/}" | tr '/' '_')" 2>>"$CCAT_OUT/ccat.txt"
+done
 
 # ---- 背景錄事件：不拖住 KUAL，時間到自動結束 ----
 (
