@@ -1,8 +1,11 @@
 #!/bin/sh
-# calibre-wireless session.sh v0.14.0
+# calibre-wireless session.sh v0.15.0
 # 一次連線階段，由 toggle.sh 在背景啟動（單一實例：toggle.sh 寫 $PIDFILE）。
-#   解除飛行模式 → 等 Wi-Fi 連上（最多 WIFI_WAIT_S）→ 開 INPUT 讓 calibre 的廣播回覆進來
-#   → 防休眠 → 跑 Go client → 結束（任何原因）一律：恢復休眠、關 INPUT、回飛行模式、掃描書庫。
+#   開 Wi-Fi（只開 Wi-Fi，不碰飛航模式與藍牙）→ 等 Wi-Fi 連上（最多 WIFI_WAIT_S）→ 開 INPUT 讓 calibre 的廣播回覆進來
+#   → 防休眠 → 跑 Go client → 結束（任何原因）一律：恢復休眠、關 INPUT、Wi-Fi 恢復成連線前的樣子、掃描書庫。
+# 為什麼不碰飛航模式（v0.15.0）：這台 Kindle 切飛航模式一定連藍牙一起切（手動切也是），使用者的藍牙翻頁器
+#   一斷就要進它的程式重新配對 → 藍牙永遠不能斷（使用者定案 2026-11-14）。v0.14.0 實測（5.13.5）：
+#   飛航模式開著時 com.lab126.wifid enable 1 → 7 秒連上，飛航開關與藍牙都沒動；enable 0 → 1 秒內斷開。
 # 中途休眠導致連線中斷（client 非 0 結束）：等喚醒後 Wi-Fi 自己連回來，再連一次，最多 RECONNECT_MAX 次。
 . "$(dirname "$0")/common.sh"
 
@@ -112,7 +115,13 @@ cleanup() {
     rm -f "$FIFO"
     sleep_block 0
     input_close
-    lipc-set-prop -i com.lab126.cmd wirelessEnable 0 2>>"$LOG"
+    # Wi-Fi 恢復成連線前的樣子：原本關著就關回去，原本就開著不動
+    if [ "$wifi_was" = 1 ]; then
+        wifi_end_en="Wi-Fi left on (it was on before)"; wifi_end_zh="Wi-Fi 保持開著（連線前就開著）"
+    else
+        lipc-set-prop -i com.lab126.wifid enable 0 2>>"$LOG"
+        wifi_end_en="Wi-Fi off"; wifi_end_zh="Wi-Fi 已關閉"
+    fi
     # 「最近」排序：放在收尾才做——這時點書本按鈕、開 KUAL 寫入的時間早就寫完了；在要求重新掃描之前
     apply_recent_order
     # 書庫重新掃描，讓新書出現在首頁。com.lab126.scanner doFullScan 在 5.13.5 尚未實機驗證
@@ -123,9 +132,9 @@ cleanup() {
     fi
     rm -f "$PIDFILE"
     render_menu
-    log "Session ended, airplane mode on" "連線結束，已回到飛行模式"
+    log "Session ended, $wifi_end_en" "連線結束，$wifi_end_zh"
     # 失敗的原因（找不到 calibre、Wi-Fi 連不上…）留著給使用者看，不蓋成「已斷線」
-    [ -n "$final_msg" ] || status_set "calibre: disconnected, airplane mode on" "calibre：已斷線，回到飛行模式"
+    [ -n "$final_msg" ] || status_set "calibre: disconnected, $wifi_end_en" "calibre：已斷線，$wifi_end_zh"
     # 最後一句留 FINAL_HOLD_S 秒、每秒重畫（結束時書庫會重新啟動蓋掉它），再停掉所有重畫、擦掉
     i=0
     while [ "$i" -lt "$FINAL_HOLD_S" ]; do
@@ -145,6 +154,8 @@ on_term() {
     stopping=1
     [ -n "$cpid" ] && kill "$cpid" 2>/dev/null
 }
+# 連線前的 Wi-Fi 狀態，收尾時照它恢復；在 trap 之前讀，太早收到 TERM 也不會把原本開著的 Wi-Fi 關掉
+wifi_was="$(lipc-get-prop com.lab126.wifid enable 2>/dev/null)"
 trap on_term TERM INT
 
 # 跑一次 Go client，回傳它的結束碼。log 逐行轉進 calibre-wireless.log，並把進度畫在螢幕上
@@ -190,7 +201,8 @@ status_set "calibre: turning on Wi-Fi..." "calibre：開啟 Wi-Fi 中…"
 status_redraw_loop </dev/null >/dev/null 2>&1 &
 spid=$!
 evpids="$(status_event_redraw_start)"
-lipc-set-prop -i com.lab126.cmd wirelessEnable 1 2>>"$LOG"
+log "Wi-Fi before session: enable=${wifi_was:-?}" "連線前的 Wi-Fi 狀態（1＝開）"
+lipc-set-prop -i com.lab126.wifid enable 1 2>>"$LOG"
 
 tries=0
 while :; do

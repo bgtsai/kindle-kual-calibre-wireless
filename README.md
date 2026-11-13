@@ -7,7 +7,7 @@ A KUAL extension for jailbroken Kindles. In desktop calibre, **Connect/share →
 - **Home-screen covers**, written the same way calibre's USB driver does
 - **One folder per book**: `documents/<title>/<title> - <authors>.<ext>`, so the `.sdr` folders the Kindle creates stay inside it. Deleting a book in calibre removes its folder too.
 - **Chinese file names**: calibre always turns file names into pinyin; this extension names books `<title> - <authors>` in Traditional Chinese, Simplified Chinese, or exactly as in calibre (your choice)
-- **Airplane mode handled for you**: Wi-Fi turns on when you connect and back off when the session ends
+- **Wi-Fi handled for you, Bluetooth left alone**: only Wi-Fi is switched on when you connect and put back the way it was when the session ends; airplane mode and Bluetooth (e.g. a Bluetooth page turner) are never touched — on this Kindle, switching airplane mode always switches Bluetooth too
 - **Ends by itself**: 5 minutes after connecting if no book arrives, 3 minutes after the last book, or immediately when you eject in calibre
 - **No sleep while connected**; if the Kindle sleeps anyway, it reconnects after waking
 - **Books sent over USB show up too**: calibre's device view lists them (from the `metadata.calibre` file calibre's USB driver keeps on the Kindle), and deleting one over Wi-Fi also removes it from that file
@@ -68,7 +68,7 @@ Common mistakes:
 2. On the Kindle: tap **Calibre 連線** in the library, or KUAL ▸ Calibre Wireless ▸ **連線到 calibre** (Connect).
 3. Status messages appear at the **bottom** of the screen: `turning on Wi-Fi…`, `searching for calibre…`, `connected`, `received 1/3`… You can tap connect first and start calibre afterwards — the Kindle keeps looking for up to 5 minutes.
 4. In calibre the Kindle appears as **Wireless device: Kindle**. Send and delete books as usual.
-5. To end: eject it in calibre, tap the book / menu item again, or just wait (see the timers above). The Kindle goes back to airplane mode and rescans the library.
+5. To end: eject it in calibre, tap the book / menu item again, or just wait (see the timers above). Wi-Fi goes back to how it was and the Kindle rescans the library.
 
 ### If calibre doesn't find the Kindle (`calibre not found on network`)
 
@@ -103,18 +103,18 @@ Calibre Wireless ▸
 
 ## What happens during a session
 
-1. Airplane mode off; waits up to **60 s** for Wi-Fi to connect (otherwise gives up and goes back to airplane mode).
+1. Turns on Wi-Fi only (`com.lab126.wifid enable 1`; airplane mode stays as it is, so the status bar may keep showing the airplane icon and no Wi-Fi icon — the on-screen status line tells you when Wi-Fi is connected); waits up to **60 s** for it to connect (otherwise gives up).
 2. Sets the Kindle's clock from `pool.ntp.org` (public volunteer time servers, not Amazon; same method as KOReader's time-sync plugin) — a Kindle that is always in airplane mode never syncs and its clock stops, which also breaks the "Recent" sort order. A failure is only logged.
 3. Opens the Kindle's own firewall (`iptables INPUT`) for calibre's reply — UDP coming **from** calibre's 5 broadcast ports only — for as long as the session runs.
 4. Blocks sleep (`com.lab126.powerd preventScreenSaver`).
 5. Broadcasts to find calibre, again every few seconds for up to **5 minutes** (falls back to your subnet's broadcast address, e.g. `192.168.1.255`, if `255.255.255.255` fails right after boot), then talks to it over TCP.
 6. If the connection drops (usually because the Kindle slept), waits for Wi-Fi to come back and reconnects — up to 3 times.
 - The bottom line of the screen shows the current step the whole time (turning on Wi-Fi, setting the clock, searching, connected, receiving n/N, received, idle…) and is redrawn right after the Kindle repaints the screen (library or another app coming to the front, dialogs) and every 3 s as a fallback; the last message stays 6 s.
-7. At the end, whatever the reason: sleep allowed again, firewall rule removed, airplane mode on, "Recent" order adjusted (the two menu items above, through the Kindle's own library service on `127.0.0.1:9101`), library rescan. The last message stays for 4 seconds, then the message lines are wiped.
+7. At the end, whatever the reason: sleep allowed again, firewall rule removed, Wi-Fi put back the way it was (off if it was off before), "Recent" order adjusted (the two menu items above, through the Kindle's own library service on `127.0.0.1:9101`), library rescan. The last message stays for 4 seconds, then the message lines are wiped.
 
 ### How long each step waits
 
-Whenever a session ends — for any reason in this table — the Kindle goes back to airplane mode.
+Whenever a session ends — for any reason in this table — Wi-Fi is put back the way it was before the session.
 
 | Step | Time | When it runs out |
 | --- | --- | --- |
@@ -155,8 +155,8 @@ After a session, open `extensions/calibre-wireless/calibre-wireless.log`. You sh
 2026/11/04 23:15:26 book 1/2 received
 2026/11/04 23:15:26 book 2/2 received
 2026/11/04 23:18:26 auto-disconnect: idle after last book for 3m0s
-2026-11-04 23:18:26  Session ended, airplane mode on
-                     Chinese | 連線結束，已回到飛行模式
+2026-11-14 05:34:11  Session ended, Wi-Fi off
+                     Chinese | 連線結束，Wi-Fi 已關閉
 ```
 
 Lines with `-` in the date come from the shell scripts and are written twice: English, then an indented `Chinese |` line with the same message. Lines with `/` come from the program itself (English only). `WARN:` lines tell you which step failed (for example `preventScreenSaver=1 failed`).
