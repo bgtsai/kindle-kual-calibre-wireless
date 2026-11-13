@@ -11,9 +11,11 @@ A KUAL extension for jailbroken Kindles. In desktop calibre, **Connect/share →
 - **Ends by itself**: 5 minutes after connecting if no book arrives, 3 minutes after the last book, or immediately when you eject in calibre
 - **No sleep while connected**; if the Kindle sleeps anyway, it reconnects after waking
 - **Books sent over USB show up too**: calibre's device view lists them (from the `metadata.calibre` file calibre's USB driver keeps on the Kindle), and deleting one over Wi-Fi also removes it from that file
+- **Fixed "Recent" order**: **Calibre 連線** always first, KUAL last; both can be turned off in the menu
+- **Book buttons with their own covers**, plus a **重新整理** book that re-reads the covers and restores the order (it sorts itself last)
 - **Two ways to start**: a KUAL menu item, or a "book" in your library you tap (needs the Universal Hotfix, see [Requirements](#requirements))
 
-> **Tested on:** Kindle Oasis 2, firmware 5.13.5 (kernel 4.1.15), with calibre 7.6 — connecting from KUAL and from the library book button, receiving and deleting books (including books sent over USB), on-screen messages, and clock sync. Other models may need adjustments — see [Customizing for your Kindle with AI](#customizing-for-your-kindle-with-ai).
+> **Tested on:** Kindle Oasis 2, firmware 5.13.5 (kernel 4.1.15), with calibre 7.6 — connecting from KUAL and from the library book button, receiving and deleting books (including books sent over USB), on-screen messages, the "Recent" order, and the book-button covers with 重新整理 (clock sync does not work on the device yet). Other models may need adjustments — see [Customizing for your Kindle with AI](#customizing-for-your-kindle-with-ai).
 
 ## Requirements
 
@@ -133,6 +135,8 @@ Waiting times count only while the Kindle is awake: time spent asleep doesn't us
 | --- | --- | --- |
 | `calibre-wireless.log` | `extensions/calibre-wireless/` | One entry per step of every session. Trimmed automatically past about 200 KB. |
 | `calibre-wireless.conf` | `extensions/calibre-wireless/` | Settings (`filename_chinese=traditional/simplified/original`, `pin_calibre_book=on/off`, `pin_days=365`, `kual_last=on/off`). Comes in the zip; the menu rewrites it. |
+| `cover_connect.png`, `cover_refresh.png` | `extensions/calibre-wireless/` | Covers of the two book buttons (450×600 grayscale PNG, in the zip). You can replace them with your own images under the same names, then run **重新整理** once. |
+| `.sh.sdr/` | `documents/` | Folder sh_integration creates for each `.sh` book; the cover is extracted into it. **重新整理** deletes and recreates it. |
 | `metadata.calibre` | drive root | Not created by this extension — calibre's USB driver writes it. Read to list books sent over USB; the entry of a book you delete over Wi-Fi is removed. Books copied to the Kindle without calibre are in neither list and don't show up. |
 | `.calibre-wireless.json` | `documents/` | Which books calibre sent and their file names, so calibre's "On device" column survives reconnects. Hidden file. |
 | `thumbnail_*_portrait.jpg` | `system/thumbnails/` | Home-screen covers. Backup copies in `amazon-cover-bug/` are put back on every connect if the Kindle deleted them. |

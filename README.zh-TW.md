@@ -12,8 +12,10 @@
 - **連線中不休眠**；萬一休眠了，喚醒後自動重連
 - **USB 傳的書也看得到**：calibre 的裝置清單會列出它們（讀 calibre USB 驅動留在 Kindle 上的 `metadata.calibre`），從無線刪掉時也會同步移除那份紀錄
 - **兩種啟動方式**：KUAL 選單，或點書庫裡的一本「書」（需要 Universal Hotfix，見[需要的東西](#需要的東西)）
+- **書庫「最近」排序固定**：**Calibre 連線** 永遠第一、KUAL 放最後，兩個都可以在選單關掉
+- **書本按鈕有自己的封面**；另有一本 **重新整理**，點一下就重讀封面、把排序調回來（自己排在最後）
 
-> **實測機型：** Kindle Oasis 2、韌體 5.13.5（核心 4.1.15），搭配 calibre 7.6——KUAL 與書庫書本按鈕連線、收書與刪書（含 USB 傳的書）、畫面訊息、對時都測過。其他機型可能要調整，見[請 AI 幫你改成適合你的 Kindle](#請-ai-幫你改成適合你的-kindle)。
+> **實測機型：** Kindle Oasis 2、韌體 5.13.5（核心 4.1.15），搭配 calibre 7.6——KUAL 與書庫書本按鈕連線、收書與刪書（含 USB 傳的書）、畫面訊息、「最近」排序、書本按鈕封面與重新整理都測過（對時在實機上還不成功）。其他機型可能要調整，見[請 AI 幫你改成適合你的 Kindle](#請-ai-幫你改成適合你的-kindle)。
 
 ## 需要的東西
 
@@ -133,6 +135,8 @@ Calibre Wireless ▸
 | --- | --- | --- |
 | `calibre-wireless.log` | `extensions/calibre-wireless/` | 每次連線的每一步。超過約 200 KB 會自動裁短。 |
 | `calibre-wireless.conf` | `extensions/calibre-wireless/` | 設定（`filename_chinese=traditional/simplified/original`、`pin_calibre_book=on/off`、`pin_days=365`、`kual_last=on/off`）。在 zip 裡，選單會改寫它。 |
+| `cover_connect.png`、`cover_refresh.png` | `extensions/calibre-wireless/` | 兩本書本按鈕的封面（450×600 灰階 PNG，在 zip 裡）。可以換成自己的圖，檔名不變，換完按一次 **重新整理**。 |
+| `.sh.sdr/` | `documents/` | sh_integration 為每本 `.sh` 書建的資料夾，封面會解到裡面。**重新整理** 會刪掉重建。 |
 | `metadata.calibre` | 磁碟根目錄 | 不是這個插件建的，是 calibre 的 USB 驅動寫的。讀它來列出 USB 傳的書；從無線刪掉的書會移除那一筆。不是透過 calibre 放進 Kindle 的書，兩份清單都沒有，不會出現。 |
 | `.calibre-wireless.json` | `documents/` | calibre 傳過哪些書、各自的檔名，讓 calibre 的「在裝置上」欄位重連後還在。隱藏檔。 |
 | `thumbnail_*_portrait.jpg` | `system/thumbnails/` | 首頁封面。備份在 `amazon-cover-bug/`，Kindle 刪掉的話每次連線會補回來。 |
