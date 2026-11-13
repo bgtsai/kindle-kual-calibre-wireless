@@ -91,7 +91,7 @@ Calibre Wireless ▸
 | --- | --- |
 | **連線到 calibre／斷開 calibre 連線** | 連線／斷線，標籤顯示目前狀態。跟點書庫的 **Calibre 連線** 一樣。 |
 | **檔名：繁體／簡體／原樣** | 之後收到的書的檔名與資料夾名：繁體、簡體、跟 calibre 一樣。點一下輪替。已在 Kindle 上的書不會改名。連線中改設定，下次連線才生效。 |
-| **Diagnose** | 把系統資訊寫到 `diagnose.txt`（只讀，不改任何東西）。接著在背景錄 2 分鐘電源與 Wi-Fi 事件到 `diagnose_events.txt`——這段時間內讓 Kindle 休眠再喚醒一次，然後把 Wi-Fi 關掉再打開。用來排查問題，或改成適合其他機型。 |
+| **Diagnose** | 把系統資訊寫到 `diagnose.txt`（只讀，不改任何東西）。接著在背景錄 2 分鐘電源與 Wi-Fi 事件到 `diagnose_events.txt`——這段時間內讓 Kindle 休眠再喚醒一次，然後把 Wi-Fi 關掉再打開。另外會把書庫資料庫（`/var/local/cc.db`，複製到 `/tmp` 後查複本）的只讀查詢結果附加到 `diagnose_ccdb.txt`。用來排查問題，或改成適合其他機型。 |
 
 ## 一次連線會做什麼
 
@@ -128,7 +128,7 @@ Calibre Wireless ▸
 | `metadata.calibre` | 磁碟根目錄 | 不是這個插件建的，是 calibre 的 USB 驅動寫的。讀它來列出 USB 傳的書；從無線刪掉的書會移除那一筆。不是透過 calibre 放進 Kindle 的書，兩份清單都沒有，不會出現。 |
 | `.calibre-wireless.json` | `documents/` | calibre 傳過哪些書、各自的檔名，讓 calibre 的「在裝置上」欄位重連後還在。隱藏檔。 |
 | `thumbnail_*_portrait.jpg` | `system/thumbnails/` | 首頁封面。備份在 `amazon-cover-bug/`，Kindle 刪掉的話每次連線會補回來。 |
-| `diagnose.txt`、`diagnose_events.txt` | `extensions/calibre-wireless/` | **Diagnose** 的結果。 |
+| `diagnose.txt`、`diagnose_events.txt`、`diagnose_ccdb.txt` | `extensions/calibre-wireless/` | **Diagnose** 的結果。 |
 
 ### 確認有沒有正常運作
 

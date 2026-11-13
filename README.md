@@ -91,7 +91,7 @@ Calibre Wireless ▸
 | --- | --- |
 | **連線到 calibre / 斷開 calibre 連線** | Connect / disconnect. The label shows the current state. Same as tapping the **Calibre 連線** book. |
 | **檔名：繁體 / 簡體 / 原樣** | File and folder names of newly received books: Traditional Chinese / Simplified Chinese / exactly as in calibre. Tap to cycle. Books already on the Kindle are not renamed. Changing it while connected takes effect from the next connection. |
-| **Diagnose** | Writes system information to `diagnose.txt` (read-only, changes nothing). Then, for 2 minutes in the background, records power and Wi-Fi events to `diagnose_events.txt` — put the Kindle to sleep and wake it once, then turn Wi-Fi off and on during that time. Used for troubleshooting and for adapting the extension to another model. |
+| **Diagnose** | Writes system information to `diagnose.txt` (read-only, changes nothing). Then, for 2 minutes in the background, records power and Wi-Fi events to `diagnose_events.txt` — put the Kindle to sleep and wake it once, then turn Wi-Fi off and on during that time. It also appends a read-only query of the library database (`/var/local/cc.db`, queried on a copy in `/tmp`) to `diagnose_ccdb.txt`. Used for troubleshooting and for adapting the extension to another model. |
 
 ## What happens during a session
 
@@ -128,7 +128,7 @@ Waiting times count only while the Kindle is awake: time spent asleep doesn't us
 | `metadata.calibre` | drive root | Not created by this extension — calibre's USB driver writes it. Read to list books sent over USB; the entry of a book you delete over Wi-Fi is removed. Books copied to the Kindle without calibre are in neither list and don't show up. |
 | `.calibre-wireless.json` | `documents/` | Which books calibre sent and their file names, so calibre's "On device" column survives reconnects. Hidden file. |
 | `thumbnail_*_portrait.jpg` | `system/thumbnails/` | Home-screen covers. Backup copies in `amazon-cover-bug/` are put back on every connect if the Kindle deleted them. |
-| `diagnose.txt`, `diagnose_events.txt` | `extensions/calibre-wireless/` | Output of **Diagnose**. |
+| `diagnose.txt`, `diagnose_events.txt`, `diagnose_ccdb.txt` | `extensions/calibre-wireless/` | Output of **Diagnose**. |
 
 ### Checking that it works
 

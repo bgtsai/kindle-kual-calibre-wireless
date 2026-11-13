@@ -1,9 +1,11 @@
 #!/bin/sh
-# calibre-wireless diagnose.sh v0.8.0 — 唯讀，不改任何設定
+# calibre-wireless diagnose.sh v0.9.2 — 唯讀，不改任何設定
 # 結果寫到使用者區（USB 拿得到）：
 #   extensions/calibre-wireless/diagnose.txt         一次性的系統資訊
 #   extensions/calibre-wireless/diagnose_events.txt  按下後 EVENT_RECORD_S 秒內的 powerd／wifid／cmd 事件
 #     （這段時間內：讓 Kindle 休眠再喚醒一次、切一次 Wi-Fi，才錄得到喚醒與連線事件）
+#   extensions/calibre-wireless/diagnose_ccdb.txt    書庫資料庫 cc.db 的查詢結果，每按一次「附加」一段，
+#     點「Calibre 連線」前後各按一次，就能比對它的上次存取時間怎麼變（v0.9.2）
 # 用途：確認 session.sh 裡尚未在 5.13.5 實機驗證的指令（防休眠 preventScreenSaver、
 # 書庫掃描 doFullScan）與喚醒事件的名稱。
 . "$(dirname "$0")/common.sh"
@@ -18,7 +20,7 @@ POLL_S=3
 section() { echo; echo "===== $1 ====="; }
 
 {
-    echo "calibre-wireless diagnose v0.8.0  $(date)"
+    echo "calibre-wireless diagnose v0.9.2  $(date)"
 
     section "firmware / kernel"
     cat /etc/prettyversion.txt 2>&1
@@ -26,10 +28,11 @@ section() { echo; echo "===== $1 ====="; }
     uname -a 2>&1
 
     section "tools"
-    for t in lipc-get-prop lipc-set-prop lipc-wait-event lipc-probe eips fbink iptables mkfifo timeout ntpdate ntpd hwclock; do
+    for t in lipc-get-prop lipc-set-prop lipc-wait-event lipc-probe eips fbink iptables mkfifo timeout ntpdate ntpd hwclock sqlite3 inotifyd; do
         printf '%s: ' "$t"; which "$t" 2>/dev/null || echo "(not found)"
     done
     printf 'client: '; ls -l "$CLIENT" 2>&1
+    printf 'busybox inotifyd applet: '; busybox --list 2>/dev/null | grep -x inotifyd || echo "(not found)"
 
     section "powerd properties (lipc-probe -v com.lab126.powerd)"
     lipc-probe -v com.lab126.powerd 2>&1
@@ -85,6 +88,39 @@ section() { echo; echo "===== $1 ====="; }
 
     echo; echo "===== end ====="
 } > "$OUT" 2>&1
+
+# ---- cc.db（書庫資料庫，「最近」排序依 Entries.p_lastAccess）：只讀 ----
+# 不直接開 /var/local/cc.db：書庫服務 com.lab126.ccat 一直在用它。先把 cc.db 連同日誌檔
+# （-journal／-wal／-shm）複製到 /tmp，只查複本，不碰原檔也不取得它的鎖。
+CCDB=/var/local/cc.db
+CCDB_COPY=/tmp/calibre-wireless-ccdb
+CCDB_OUT="$BASE/diagnose_ccdb.txt"
+{
+    echo; echo "########## cc.db $(date)  (date +%s = $(date +%s)) ##########"
+    ls -l "$CCDB"* 2>&1
+    if ! which sqlite3 >/dev/null 2>&1; then
+        echo "sqlite3 not found"
+    else
+        rm -rf "$CCDB_COPY"; mkdir -p "$CCDB_COPY"
+        for f in "$CCDB" "$CCDB-journal" "$CCDB-wal" "$CCDB-shm"; do
+            [ -f "$f" ] && cp "$f" "$CCDB_COPY/" 2>&1
+        done
+        db="$CCDB_COPY/cc.db"
+        echo "sqlite3 version: $(sqlite3 -version 2>&1)"
+        echo "--- journal_mode"; sqlite3 "$db" 'PRAGMA journal_mode;' 2>&1
+        echo "--- sqlite_master (type|name|table)"
+        sqlite3 "$db" "SELECT type, name, tbl_name FROM sqlite_master ORDER BY type, name;" 2>&1
+        echo "--- Entries schema"; sqlite3 "$db" '.schema Entries' 2>&1
+        echo "--- triggers"; sqlite3 "$db" "SELECT sql FROM sqlite_master WHERE type='trigger';" 2>&1
+        echo "--- 'Calibre 連線' entry (all columns)"
+        sqlite3 -line "$db" "SELECT * FROM Entries WHERE p_location LIKE '%documents/Calibre%.sh';" 2>&1
+        echo "--- top 15 by p_lastAccess (value|type|p_location)"
+        sqlite3 "$db" "SELECT p_lastAccess, typeof(p_lastAccess), p_location FROM Entries ORDER BY p_lastAccess DESC LIMIT 15;" 2>&1
+        echo "--- p_lastAccess: max | count > now | count"
+        sqlite3 "$db" "SELECT max(p_lastAccess), sum(p_lastAccess > $(date +%s)), count(*) FROM Entries;" 2>&1
+        rm -rf "$CCDB_COPY"
+    fi
+} >> "$CCDB_OUT" 2>&1
 
 # ---- 背景錄事件：不拖住 KUAL，時間到自動結束 ----
 (
