@@ -39,7 +39,8 @@ No reboot needed.
 ```
 Kindle drive (root)
 ├── documents/
-│   └── Calibre 連線.sh            ← the library book button
+│   ├── Calibre 連線.sh            ← the library book button
+│   └── 重新整理.sh                ← re-reads the book covers and fixes the "Recent" order
 └── extensions/
     └── calibre-wireless/          ← this folder name must stay "calibre-wireless"
         ├── config.xml
@@ -86,6 +87,7 @@ Calibre Wireless ▸
     檔名（繁體／簡體／原樣）：繁體
     置頂 Calibre 連線（開／關）：開
     KUAL 放最後（開／關）：開
+    重新整理（封面與排序）
     Diagnose (write diagnose.txt)
 ```
 
@@ -95,6 +97,7 @@ Calibre Wireless ▸
 | **檔名（繁體／簡體／原樣）：…** | File and folder names of newly received books: Traditional Chinese / Simplified Chinese / exactly as in calibre. Tap to cycle. Books already on the Kindle are not renamed. Changing it while connected takes effect from the next connection. |
 | **置頂 Calibre 連線（開／關）：…** | Keeps the **Calibre 連線** book first in the library's "Recent" sort. When a connection ends, its last-opened time is set to now + `pin_days` days (default 365, in `calibre-wireless.conf`), so books you open in the meantime stay below it; each connection renews it. Turning it on applies it at once. Turning it off only stops the change (the old time isn't restored). |
 | **KUAL 放最後（開／關）：…** | When a connection ends, sets KUAL's last-opened time to 2000-01-01 so it sorts last in "Recent". KUAL moves itself to the top again whenever it is opened, so it goes back to the bottom at the next connection end. |
+| **重新整理（封面與排序）** | Same as tapping the **重新整理** book. Re-reads the covers of the two book buttons (the Kindle only reads a `.sh` book's `# Icon:` when the book is added, so both are moved out of `documents/`, the library is rescanned, then moved back and rescanned — they briefly disappear from the library), then sets the "Recent" order again: **Calibre 連線** first, KUAL last, **重新整理** after KUAL. Use it after replacing `cover_connect.png` / `cover_refresh.png` or if the order got mixed up. Not available while connected. Steps are logged to `calibre-wireless.log`. |
 | **Diagnose** | Writes system information to `diagnose.txt` (read-only, changes nothing). Then, for 2 minutes in the background, records power and Wi-Fi events to `diagnose_events.txt` — put the Kindle to sleep and wake it once, then turn Wi-Fi off and on during that time. It also appends a read-only query of the library database (`/var/local/cc.db`, queried on a copy in `/tmp`) to `diagnose_ccdb.txt`, lists the system fonts and which message font is usable, and copies the library service's scripts (`/usr/lib/ccat/*.lua`) to `diagnose_ccat/` (the session token is only reported as present/absent, never copied). Used for troubleshooting and for adapting the extension to another model. |
 
 ## What happens during a session
@@ -179,7 +182,7 @@ Do **not** install it with MRPI (KUAL ▸ Install MR Packages): Hotfix 2.x alway
 
 ## Uninstall
 
-Delete `extensions/calibre-wireless/` and `documents/Calibre 連線.sh` over USB. Optionally also `documents/.calibre-wireless.json`. Books you received stay where they are.
+Delete `extensions/calibre-wireless/` and `documents/Calibre 連線.sh`, `documents/重新整理.sh` over USB. Optionally also `documents/.calibre-wireless.json`. Books you received stay where they are.
 
 ## Customizing for your Kindle with AI
 

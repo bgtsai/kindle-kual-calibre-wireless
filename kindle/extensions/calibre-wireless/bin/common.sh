@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless common.sh v0.15.1 — 各腳本共用的路徑與函式
+# calibre-wireless common.sh v0.16.0 — 各腳本共用的路徑與函式
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$BASE/calibre-wireless.conf"
@@ -272,12 +272,16 @@ filename_label() {
 CCDB=/var/local/cc.db
 BOOK_BUTTON_PATH="/mnt/us/documents/Calibre 連線.sh"
 KUAL_BOOK_PATH="/mnt/us/documents/KUAL.kual"
+REFRESH_BOOK_PATH="/mnt/us/documents/重新整理.sh"
 # 「Calibre 連線」設成「現在 + pin_days 天」：比任何剛打開的書都晚，pin_days 內用一次就續期。
 # 預設 365（使用者選）：時鐘停在 2020 時，時間是 2022-12／2023-03 的書照樣顯示、排序，
 # 所以一年的「未來時間」不會被當成無效而隱藏。太遠（例如 2099）有被隱藏的回報，不用。
 PIN_DAYS_DEFAULT=365
 # KUAL 設成 2000-01-01 00:00 UTC：比使用者所有的書都早；不用 0，0 這類值可能被當成「沒打開過」。
 KUAL_LAST_ACCESS=946684800
+# 「重新整理」書本按鈕排在 KUAL 後面（v0.16.0，使用者要求）：比 KUAL 早一天＝1999-12-31。
+# 這本是我們自己的按鈕，不受 kual_last 開關影響，一律放最後。
+REFRESH_LAST_ACCESS=946598400
 
 # 用路徑查 cc.db 那一筆的 uuid；查不到輸出空字串。先試唯讀開啟，舊版 sqlite3 不認得 -readonly 時再一般開啟（只有 SELECT）
 ccdb_uuid() {
@@ -306,6 +310,8 @@ apply_recent_order() {
             log "KUAL last: KUAL not in library ($KUAL_BOOK_PATH), skipped" "KUAL 放最後：書庫裡沒有 KUAL，略過"
         fi
     fi
+    u="$(ccdb_uuid "$REFRESH_BOOK_PATH")"
+    [ -n "$u" ] && spec="${spec:+$spec,}$u=$REFRESH_LAST_ACCESS"
     [ -n "$spec" ] || return 0
     if "$CLIENT" -set-last-access "$spec" >> "$LOG" 2>&1; then
         log "Recent order updated" "已調整「最近」排序"
@@ -340,7 +346,8 @@ render_menu() {
         { "name": "$fn", "priority": 2, "action": "./bin/filename_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "$pin", "priority": 3, "action": "./bin/pin_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "$kual", "priority": 4, "action": "./bin/kual_last_toggle.sh", "exitmenu": false, "refresh": true },
-        { "name": "Diagnose (write diagnose.txt)", "priority": 5, "action": "./bin/diagnose.sh" }
+        { "name": "重新整理（封面與排序）", "priority": 5, "action": "./bin/refresh.sh" },
+        { "name": "Diagnose (write diagnose.txt)", "priority": 6, "action": "./bin/diagnose.sh" }
       ]
     }
   ]

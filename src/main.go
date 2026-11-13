@@ -33,7 +33,7 @@ import (
 	"github.com/shermp/UNCaGED/uc"
 )
 
-const version = "0.15.1"
+const version = "0.16.0"
 
 // client implements uc.Client. Metadata for every book calibre sent is kept in
 // one JSON file (stateFile) so calibre's "On device" column survives reconnects.

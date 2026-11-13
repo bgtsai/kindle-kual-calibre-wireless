@@ -39,7 +39,8 @@
 ```
 Kindle 磁碟（根目錄）
 ├── documents/
-│   └── Calibre 連線.sh            ← 書庫裡的書本按鈕
+│   ├── Calibre 連線.sh            ← 書庫裡的書本按鈕
+│   └── 重新整理.sh                ← 重讀書本封面、把「最近」排序調回來
 └── extensions/
     └── calibre-wireless/          ← 資料夾名稱必須是 calibre-wireless
         ├── config.xml
@@ -86,6 +87,7 @@ Calibre Wireless ▸
     檔名（繁體／簡體／原樣）：繁體
     置頂 Calibre 連線（開／關）：開
     KUAL 放最後（開／關）：開
+    重新整理（封面與排序）
     Diagnose (write diagnose.txt)
 ```
 
@@ -95,6 +97,7 @@ Calibre Wireless ▸
 | **檔名（繁體／簡體／原樣）：…** | 之後收到的書的檔名與資料夾名：繁體、簡體、跟 calibre 一樣。點一下輪替。已在 Kindle 上的書不會改名。連線中改設定，下次連線才生效。 |
 | **置頂 Calibre 連線（開／關）：…** | 讓書庫「最近」排序裡的 **Calibre 連線** 永遠排第一。每次連線結束時，把它的上次開啟時間設成「現在 + `pin_days` 天」（預設 365，在 `calibre-wireless.conf`），這段期間你打開的書都排在它下面；每連線一次就續期。打開時立刻套用一次。關掉只是不再改，不會還原原本的時間。 |
 | **KUAL 放最後（開／關）：…** | 每次連線結束時，把 KUAL 的上次開啟時間設成 2000-01-01，讓它排在「最近」的最後。KUAL 每次被打開都會把自己移回最前面，要到下次連線結束才會再放回最後。 |
+| **重新整理（封面與排序）** | 跟點書庫裡的 **重新整理** 一樣。先重讀兩本書本按鈕的封面（Kindle 只在 `.sh` 書被加進書庫時讀一次 `# Icon:`，所以把兩本移出 `documents/`、書庫重新掃描、再移回來掃描一次——過程中它們會短暫從書庫消失），再把「最近」排序調回來：**Calibre 連線** 最前、KUAL 最後、**重新整理** 在 KUAL 後面。換了 `cover_connect.png`／`cover_refresh.png`，或排序跑掉時用。連線中不能用。每一步都寫進 `calibre-wireless.log`。 |
 | **Diagnose** | 把系統資訊寫到 `diagnose.txt`（只讀，不改任何東西）。接著在背景錄 2 分鐘電源與 Wi-Fi 事件到 `diagnose_events.txt`——這段時間內讓 Kindle 休眠再喚醒一次，然後把 Wi-Fi 關掉再打開。另外會把書庫資料庫（`/var/local/cc.db`，複製到 `/tmp` 後查複本）的只讀查詢結果附加到 `diagnose_ccdb.txt`、列出系統字型與哪個訊息字型能用，並把書庫服務的程式（`/usr/lib/ccat/*.lua`）複製到 `diagnose_ccat/`（驗證金鑰只記錄有沒有，不複製內容）。用來排查問題，或改成適合其他機型。 |
 
 ## 一次連線會做什麼
@@ -179,7 +182,7 @@ Calibre Wireless ▸
 
 ## 移除
 
-用 USB 刪掉 `extensions/calibre-wireless/` 和 `documents/Calibre 連線.sh`；需要的話也刪 `documents/.calibre-wireless.json`。已經收到的書留在原處。
+用 USB 刪掉 `extensions/calibre-wireless/` 、`documents/Calibre 連線.sh` 和 `documents/重新整理.sh`；需要的話也刪 `documents/.calibre-wireless.json`。已經收到的書留在原處。
 
 ## 請 AI 幫你改成適合你的 Kindle
 
