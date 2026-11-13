@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless common.sh v0.7.1 — 各腳本共用的路徑與函式
+# calibre-wireless common.sh v0.10.0 — 各腳本共用的路徑與函式
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$BASE/calibre-wireless.conf"
@@ -151,6 +151,61 @@ filename_label() {
     esac
 }
 
+# ---- 書庫「最近」排序：「Calibre 連線」永遠第一、KUAL 放最後（v0.10.0）----
+# 「最近」依 /var/local/cc.db 的 Entries.p_lastAccess（整數 Unix 秒）排。直接用 sqlite3 改不了
+# （索引含 COLLATE icu 的欄位，機上 sqlite3 沒有 icu），所以由 client 的 -set-last-access 請書庫
+# 服務自己改（src/ccat.go）。這裡只用 sqlite3 讀出 uuid——讀不會碰到 icu。
+# uuid 每次重新查：點書本按鈕後那一筆曾被刪掉重建、uuid 換新（v0.9.2 實機，原因未明）。
+CCDB=/var/local/cc.db
+BOOK_BUTTON_PATH="/mnt/us/documents/Calibre 連線.sh"
+KUAL_BOOK_PATH="/mnt/us/documents/KUAL.kual"
+# 「Calibre 連線」設成「現在 + pin_days 天」：比任何剛打開的書都晚，pin_days 內用一次就續期。
+# 預設 365（使用者選）：時鐘停在 2020 時，時間是 2022-12／2023-03 的書照樣顯示、排序，
+# 所以一年的「未來時間」不會被當成無效而隱藏。太遠（例如 2099）有被隱藏的回報，不用。
+PIN_DAYS_DEFAULT=365
+# KUAL 設成 2000-01-01 00:00 UTC：比使用者所有的書都早；不用 0，0 這類值可能被當成「沒打開過」。
+KUAL_LAST_ACCESS=946684800
+
+# 用路徑查 cc.db 那一筆的 uuid；查不到輸出空字串。先試唯讀開啟，舊版 sqlite3 不認得 -readonly 時再一般開啟（只有 SELECT）
+ccdb_uuid() {
+    q="SELECT p_uuid FROM Entries WHERE p_location = '$1';"
+    sqlite3 -readonly "$CCDB" "$q" 2>/dev/null || sqlite3 "$CCDB" "$q" 2>>"$LOG"
+}
+
+# 依設定調整兩筆的上次存取時間；結果寫進 log，失敗不影響連線
+apply_recent_order() {
+    spec=""
+    if [ "$(conf_get pin_calibre_book on)" = on ]; then
+        days="$(conf_get pin_days "$PIN_DAYS_DEFAULT")"
+        case "$days" in ''|*[!0-9]*) days="$PIN_DAYS_DEFAULT" ;; esac
+        u="$(ccdb_uuid "$BOOK_BUTTON_PATH")"
+        if [ -n "$u" ]; then
+            spec="$u=$(( $(date +%s) + days * 86400 ))"
+        else
+            log "Pin: book button not in library ($BOOK_BUTTON_PATH), skipped" "置頂：書庫裡沒有「Calibre 連線」這本，略過"
+        fi
+    fi
+    if [ "$(conf_get kual_last on)" = on ]; then
+        u="$(ccdb_uuid "$KUAL_BOOK_PATH")"
+        if [ -n "$u" ]; then
+            spec="${spec:+$spec,}$u=$KUAL_LAST_ACCESS"
+        else
+            log "KUAL last: KUAL not in library ($KUAL_BOOK_PATH), skipped" "KUAL 放最後：書庫裡沒有 KUAL，略過"
+        fi
+    fi
+    [ -n "$spec" ] || return 0
+    if "$CLIENT" -set-last-access "$spec" >> "$LOG" 2>&1; then
+        log "Recent order updated" "已調整「最近」排序"
+    else
+        log "WARN: recent order update failed (see lines above)" "警告：調整「最近」排序失敗（原因見上面幾行）"
+    fi
+}
+
+# 開關設定值 → 選單上顯示的文字
+onoff_label() {
+    if [ "$1" = on ]; then echo "開"; else echo "關"; fi
+}
+
 # 依目前狀態重寫 menu.json。
 # 為什麼用重寫檔案：config.xml 設了 dynamic="true"，KUAL 每次打開選單都重讀 menu.json，
 # 標籤要跟著狀態變只能改檔。"refresh": true 讓 KUAL 在按完後重新載入選單（實機未驗證；
@@ -158,6 +213,8 @@ filename_label() {
 render_menu() {
     if session_running; then conn="斷開 calibre 連線"; else conn="連線到 calibre"; fi
     fn="檔名：$(filename_label "$(conf_get filename_chinese traditional)")"
+    pin="置頂 Calibre 連線：$(onoff_label "$(conf_get pin_calibre_book on)")"
+    kual="KUAL 放最後：$(onoff_label "$(conf_get kual_last on)")"
     cat > "$MENU.tmp" <<EOF
 {
   "items": [
@@ -167,7 +224,9 @@ render_menu() {
       "items": [
         { "name": "$conn", "priority": 1, "action": "./bin/toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "$fn", "priority": 2, "action": "./bin/filename_toggle.sh", "exitmenu": false, "refresh": true },
-        { "name": "Diagnose (write diagnose.txt)", "priority": 3, "action": "./bin/diagnose.sh" }
+        { "name": "$pin", "priority": 3, "action": "./bin/pin_toggle.sh", "exitmenu": false, "refresh": true },
+        { "name": "$kual", "priority": 4, "action": "./bin/kual_last_toggle.sh", "exitmenu": false, "refresh": true },
+        { "name": "Diagnose (write diagnose.txt)", "priority": 5, "action": "./bin/diagnose.sh" }
       ]
     }
   ]

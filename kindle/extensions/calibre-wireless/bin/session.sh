@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless session.sh v0.8.0
+# calibre-wireless session.sh v0.10.0
 # 一次連線階段，由 toggle.sh 在背景啟動（單一實例：toggle.sh 寫 $PIDFILE）。
 #   解除飛行模式 → 等 Wi-Fi 連上（最多 WIFI_WAIT_S）→ 開 INPUT 讓 calibre 的廣播回覆進來
 #   → 防休眠 → 跑 Go client → 結束（任何原因）一律：恢復休眠、關 INPUT、回飛行模式、掃描書庫。
@@ -98,6 +98,8 @@ cleanup() {
     sleep_block 0
     input_close
     lipc-set-prop -i com.lab126.cmd wirelessEnable 0 2>>"$LOG"
+    # 「最近」排序：放在收尾才做——這時點書本按鈕、開 KUAL 寫入的時間早就寫完了；在要求重新掃描之前
+    apply_recent_order
     # 書庫重新掃描，讓新書出現在首頁。com.lab126.scanner doFullScan 在 5.13.5 尚未實機驗證
     if lipc-set-prop com.lab126.scanner doFullScan 1 2>>"$LOG"; then
         log "Library rescan requested" "已要求重新掃描書庫"

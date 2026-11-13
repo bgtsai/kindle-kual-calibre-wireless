@@ -84,6 +84,8 @@ Kindle 磁碟（根目錄）
 Calibre Wireless ▸
     連線到 calibre  /  斷開 calibre 連線
     檔名：繁體  /  簡體  /  原樣
+    置頂 Calibre 連線：開  /  關
+    KUAL 放最後：開  /  關
     Diagnose (write diagnose.txt)
 ```
 
@@ -91,7 +93,9 @@ Calibre Wireless ▸
 | --- | --- |
 | **連線到 calibre／斷開 calibre 連線** | 連線／斷線，標籤顯示目前狀態。跟點書庫的 **Calibre 連線** 一樣。 |
 | **檔名：繁體／簡體／原樣** | 之後收到的書的檔名與資料夾名：繁體、簡體、跟 calibre 一樣。點一下輪替。已在 Kindle 上的書不會改名。連線中改設定，下次連線才生效。 |
-| **Diagnose** | 把系統資訊寫到 `diagnose.txt`（只讀，不改任何東西）。接著在背景錄 2 分鐘電源與 Wi-Fi 事件到 `diagnose_events.txt`——這段時間內讓 Kindle 休眠再喚醒一次，然後把 Wi-Fi 關掉再打開。另外會把書庫資料庫（`/var/local/cc.db`，複製到 `/tmp` 後查複本）的只讀查詢結果附加到 `diagnose_ccdb.txt`，並把書庫服務的程式（`/usr/lib/ccat/*.lua`）複製到 `diagnose_ccat/`（驗證金鑰只記錄有沒有，不複製內容）。用來排查問題，或改成適合其他機型。 |
+| **置頂 Calibre 連線：開／關** | 讓書庫「最近」排序裡的 **Calibre 連線** 永遠排第一。每次連線結束時，把它的上次開啟時間設成「現在 + `pin_days` 天」（預設 365，在 `calibre-wireless.conf`），這段期間你打開的書都排在它下面；每連線一次就續期。打開時立刻套用一次。關掉只是不再改，不會還原原本的時間。 |
+| **KUAL 放最後：開／關** | 每次連線結束時，把 KUAL 的上次開啟時間設成 2000-01-01，讓它排在「最近」的最後。KUAL 每次被打開都會把自己移回最前面，要到下次連線結束才會再放回最後。 |
+| **Diagnose** | 把系統資訊寫到 `diagnose.txt`（只讀，不改任何東西）。接著在背景錄 2 分鐘電源與 Wi-Fi 事件到 `diagnose_events.txt`——這段時間內讓 Kindle 休眠再喚醒一次，然後把 Wi-Fi 關掉再打開。另外會把書庫資料庫（`/var/local/cc.db`，複製到 `/tmp` 後查複本）的只讀查詢結果附加到 `diagnose_ccdb.txt`、列出系統字型並用它們在畫面上畫幾行範例（請拍照），並把書庫服務的程式（`/usr/lib/ccat/*.lua`）複製到 `diagnose_ccat/`（驗證金鑰只記錄有沒有，不複製內容）。用來排查問題，或改成適合其他機型。 |
 
 ## 一次連線會做什麼
 
@@ -101,7 +105,7 @@ Calibre Wireless ▸
 4. 防止休眠（`com.lab126.powerd preventScreenSaver`）。
 5. 廣播尋找 calibre，每幾秒重試一次、最多 **5 分鐘**（剛開機時 `255.255.255.255` 送不出去的話，改用你網段的廣播位址，例如 `192.168.1.255`），再用 TCP 跟它連線。
 6. 連線中斷（多半是 Kindle 休眠了）就等 Wi-Fi 回來再重連，最多 3 次。
-7. 結束時不管原因：恢復休眠、移除防火牆規則、回到飛行模式、重新掃描書庫。最後一句訊息停留 4 秒，然後把提示列擦掉。
+7. 結束時不管原因：恢復休眠、移除防火牆規則、回到飛行模式、調整「最近」排序（上面那兩個選單項目，透過 Kindle 自己的書庫服務 `127.0.0.1:9101`）、重新掃描書庫。最後一句訊息停留 4 秒，然後把提示列擦掉。
 
 ### 各步驟等多久
 
@@ -124,7 +128,7 @@ Calibre Wireless ▸
 | 檔案 | 位置（USB 磁碟上） | 用途 |
 | --- | --- | --- |
 | `calibre-wireless.log` | `extensions/calibre-wireless/` | 每次連線的每一步。超過約 200 KB 會自動裁短。 |
-| `calibre-wireless.conf` | `extensions/calibre-wireless/` | 設定（`filename_chinese=traditional/simplified/original`）。在 zip 裡，選單會改寫它。 |
+| `calibre-wireless.conf` | `extensions/calibre-wireless/` | 設定（`filename_chinese=traditional/simplified/original`、`pin_calibre_book=on/off`、`pin_days=365`、`kual_last=on/off`）。在 zip 裡，選單會改寫它。 |
 | `metadata.calibre` | 磁碟根目錄 | 不是這個插件建的，是 calibre 的 USB 驅動寫的。讀它來列出 USB 傳的書；從無線刪掉的書會移除那一筆。不是透過 calibre 放進 Kindle 的書，兩份清單都沒有，不會出現。 |
 | `.calibre-wireless.json` | `documents/` | calibre 傳過哪些書、各自的檔名，讓 calibre 的「在裝置上」欄位重連後還在。隱藏檔。 |
 | `thumbnail_*_portrait.jpg` | `system/thumbnails/` | 首頁封面。備份在 `amazon-cover-bug/`，Kindle 刪掉的話每次連線會補回來。 |

@@ -33,7 +33,7 @@ import (
 	"github.com/shermp/UNCaGED/uc"
 )
 
-const version = "0.7.0"
+const version = "0.10.0"
 
 // client implements uc.Client. Metadata for every book calibre sent is kept in
 // one JSON file (stateFile) so calibre's "On device" column survives reconnects.
@@ -403,8 +403,12 @@ func main() {
 	flag.DurationVar(&searchTimeout, "search-timeout", searchTimeout, "keep looking for calibre this long (users often tap connect first, then start calibre)")
 	flag.DurationVar(&noBookTimeout, "no-book-timeout", noBookTimeout, "disconnect if no book arrives this long after connecting (0 = never)")
 	flag.DurationVar(&afterBookTimeout, "idle-timeout", afterBookTimeout, "disconnect this long after the last book or delete (0 = never)")
+	setLA := flag.String("set-last-access", "", "uuid=unixtime[,uuid=unixtime…]: change these library entries' last-opened time via the Kindle library service, then exit (see ccat.go)")
 	flag.Parse(os.Args[1:])
 	log.SetFlags(log.Ldate | log.Ltime)
+	if *setLA != "" {
+		os.Exit(setLastAccess(*setLA))
+	}
 	log.Printf("calibre-wireless v%s starting, dir=%s", version, *dir)
 
 	c := &client{bookDir: *dir, stateFile: *stateFile, devName: *name,

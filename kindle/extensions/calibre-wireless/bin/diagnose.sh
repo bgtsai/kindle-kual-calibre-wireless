@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless diagnose.sh v0.9.3 — 唯讀，不改任何設定
+# calibre-wireless diagnose.sh v0.10.0 — 唯讀，不改任何設定
 # 結果寫到使用者區（USB 拿得到）：
 #   extensions/calibre-wireless/diagnose.txt         一次性的系統資訊
 #   extensions/calibre-wireless/diagnose_events.txt  按下後 EVENT_RECORD_S 秒內的 powerd／wifid／cmd 事件
@@ -22,7 +22,7 @@ POLL_S=3
 section() { echo; echo "===== $1 ====="; }
 
 {
-    echo "calibre-wireless diagnose v0.9.3  $(date)"
+    echo "calibre-wireless diagnose v0.10.0  $(date)"
 
     section "firmware / kernel"
     cat /etc/prettyversion.txt 2>&1
@@ -61,6 +61,14 @@ section() { echo; echo "===== $1 ====="; }
     echo "--- eips -i"
     eips -i 2>&1
     echo "eips_rows (yres / EIPS_ROW_PX=$EIPS_ROW_PX): $(eips_rows)"
+
+    section "fonts (for smoother on-screen messages, v0.10.0)"
+    echo "--- $FBINK -h (first lines + TrueType option)"
+    [ -n "$FBINK" ] && { "$FBINK" -h 2>&1 | head -n 3; "$FBINK" -h 2>&1 | grep -i -E 'truetype|-t,' | head -n 5; }
+    for d in /usr/java/lib/fonts /usr/share/fonts /mnt/us/fonts; do
+        echo "--- ls -l $d"; ls -l "$d" 2>&1
+    done
+    echo "font samples drawn on screen: see 'font samples' at the end of this file"
 
     section "clock"
     echo "date: $(date)  hwclock: $(hwclock -r 2>&1)"
@@ -114,6 +122,8 @@ CCDB_OUT="$BASE/diagnose_ccdb.txt"
         sqlite3 "$db" "SELECT type, name, tbl_name FROM sqlite_master ORDER BY type, name;" 2>&1
         echo "--- Entries schema"; sqlite3 "$db" '.schema Entries' 2>&1
         echo "--- triggers"; sqlite3 "$db" "SELECT sql FROM sqlite_master WHERE type='trigger';" 2>&1
+        echo "--- recent-order entries (p_lastAccess | p_location)"
+        sqlite3 "$db" "SELECT p_lastAccess, p_location FROM Entries WHERE p_location IN ('$BOOK_BUTTON_PATH', '$KUAL_BOOK_PATH');" 2>&1
         echo "--- 'Calibre 連線' entry (all columns)"
         sqlite3 -line "$db" "SELECT * FROM Entries WHERE p_location LIKE '%documents/Calibre%.sh';" 2>&1
         echo "--- top 15 by p_lastAccess (value|type|p_location)"
@@ -169,9 +179,37 @@ done
     notify_brief "calibre-wireless: events recorded"
 ) </dev/null >/dev/null 2>&1 &
 
-# 列號標記放在最後才畫：KUAL 關閉時書庫會重畫，太早畫會被蓋掉（v0.7.0 實機）
-# 右半邊每 5 列一個「rN」，使用者拍照就知道 eips 一列多高、最底能畫到第幾列
-for r in 5 10 15 20 25 30 35 40 45 50 55 60 65 70; do
-    eips 50 "$r" "r$r" >/dev/null 2>&1
-done
-notify "diagnose.txt written - photo the screen, then sleep/wake + toggle Wi-Fi (2 min)"
+# ---- 字型範例（v0.10.0）：用 Kindle 系統字型畫幾行，使用者拍照挑字型 ----
+# 目前的畫面訊息是 FBInk 內建點陣字型，放大後很粗糙；FBInk 完整版可用 -t 畫 TrueType/OpenType。
+# 放在最後才畫：KUAL 關閉時書庫會重畫，太早畫會被蓋掉（v0.7.0 實機）。
+# （v0.9.x 以前這裡畫 rN 列號標記；Oasis 2 的照片已存，列高 24 px，不再需要。）
+# 挑字型：Amazon Ember、Bookerly 各一，再加最多兩個檔名像中文字型的；先排除粗體／斜體
+FONT_DIR=/usr/java/lib/fonts
+pick_fonts() {
+    ls "$FONT_DIR" 2>/dev/null | grep -i -E '\.(ttf|otf|ttc)$' | grep -v -i -E 'bold|italic|oblique' > /tmp/calibre-wireless.fonts
+    for pat in 'ember' 'bookerly'; do
+        grep -i "$pat" /tmp/calibre-wireless.fonts | head -n 1
+    done
+    grep -i -E 'tc|sc|hei|song|kai|ming|cjk|gothic|mincho|ying|zh' /tmp/calibre-wireless.fonts | grep -v -i -E 'ember|bookerly' | head -n 2
+    rm -f /tmp/calibre-wireless.fonts
+}
+{
+    echo; echo "===== font samples $(date) ====="
+    echo "FBINK=$FBINK  FONT_DIR=$FONT_DIR"
+    i=1
+    # 一行一個檔名（檔名可能有空白，不用 for … in $(…)）
+    pick_fonts > /tmp/calibre-wireless.picked
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        y=$((260 + i * 150))
+        txt="$i $f  Connected 1/3  已連線 第 1/3 本"
+        echo "--- $i: $FONT_DIR/$f  (top=${y}px)"
+        if [ -n "$FBINK" ]; then
+            "$FBINK" -q -t "regular=$FONT_DIR/$f,size=10,top=$y,left=40" "$txt" 2>&1; echo "rc=$?"
+        fi
+        i=$((i + 1))
+    done < /tmp/calibre-wireless.picked
+    rm -f /tmp/calibre-wireless.picked
+    [ "$i" = 1 ] && echo "no font picked (empty $FONT_DIR or no FBInk)"
+} >> "$OUT" 2>&1
+notify "diagnose.txt written - photo the font samples, then sleep/wake + toggle Wi-Fi (2 min)"
