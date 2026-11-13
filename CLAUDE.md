@@ -97,6 +97,6 @@ calibre-debug test/calibre_server.py -- book1.azw3 book2.azw3 &   # headless cal
 
 State (2026-11-14): v0.15.0 released — connecting switches only Wi-Fi (`wifid enable`), airplane mode and Bluetooth untouched. Waiting for the user's device run: does connect/receive still work, does Bluetooth (page turner) stay connected through a whole session, does VoiceView still appear, and how the status line looks (v0.14.0 event-triggered redraws, never seen on the device yet). The test items 錄連線事件 / 測試：只開 Wi-Fi can be removed from the menu once the user agrees. Only other row still **unverified**: KUAL `"refresh": true` / Chinese menu labels. Ask before each change round.
 
-Pending draft (not archived yet): knowledge base `_pending/20261114-0113_kindle-calibre-wireless.md` (v0.9.2–v0.15.0: Recent order via ccat, fonts, status line, Bluetooth / Wi-Fi-only) → to be archived into KB 32.
+All archiving is done (2026-11-14): v0.9.2–v0.15.0 lessons are in knowledge base 32 §7 (airplane mode switches Bluetooth; Wi-Fi only via wifid enable), §10 (FBInk TrueType Chinese, status-line redraws, busybox $(…), sharing iptables / lipc-wait-event with the firewall), §13 ("Recent" order via ccat 9101). No pending draft.
 
 The Bluetooth page turner is a separate project in its own repo (`kindle-kual-bt-page-turner`) — do not work on it here.
