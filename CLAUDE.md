@@ -81,8 +81,8 @@ calibre-debug test/calibre_server.py -- book1.azw3 book2.azw3 &   # headless cal
 
 ## Next step
 
-All 7 handoff items done (2026-11-04). Next: first run on the user's Oasis 2 — install the Release zip, run Diagnose (sleep/wake + Wi-Fi toggle during the 2 min), one real session from calibre; then settle the **unverified** rows in the table above from diagnose.txt / calibre-wireless.log. Ask the user before each change round.
+State (2026-11-14): v0.9.1 released and working on the user's Oasis 2 (5.13.5) — connecting from KUAL and from the `Calibre 連線` book, receiving/deleting books (incl. USB-sent ones), per-book folders, bottom-of-screen messages, clock sync (with kindle-kual-firewall ≥ 1.16; firewall is now v1.17, Enable also installs autostart). No open tasks — wait for the user's next request and ask before each change round. Only row still **unverified**: KUAL `"refresh": true` / Chinese menu labels (ask the user what the submenu shows right after tapping).
 
-Pending notes for archiving: bgtsai/claude-knowledge-base `_pending/20261104-1330_kindle-calibre-wireless.md` (archive into KB 32 when the user says 歸檔).
+All archiving is done (KB 32 §9–10, 27 §3); there is no pending draft for this project.
 
-Separate future project (do NOT start here): Bluetooth page turner for the native reader on the Oasis 2 — kindle-hid-passthrough + kindle-button-mapper-rs, new repo and new thread.
+The Bluetooth page turner is a separate project in its own repo (`kindle-kual-bt-page-turner`) — do not work on it here.
