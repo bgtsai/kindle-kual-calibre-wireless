@@ -83,19 +83,19 @@ Kindle 磁碟（根目錄）
 ```
 Calibre Wireless ▸
     連線到 calibre  /  斷開 calibre 連線
-    檔名：繁體  /  簡體  /  原樣
-    置頂 Calibre 連線：開  /  關
-    KUAL 放最後：開  /  關
+    檔名（繁體／簡體／原樣）：繁體
+    置頂 Calibre 連線（開／關）：開
+    KUAL 放最後（開／關）：開
     Diagnose (write diagnose.txt)
 ```
 
-| 項目 | 作用 |
+| 項目（括號裡是可切換的狀態，冒號後是目前的狀態） | 作用 |
 | --- | --- |
 | **連線到 calibre／斷開 calibre 連線** | 連線／斷線，標籤顯示目前狀態。跟點書庫的 **Calibre 連線** 一樣。 |
-| **檔名：繁體／簡體／原樣** | 之後收到的書的檔名與資料夾名：繁體、簡體、跟 calibre 一樣。點一下輪替。已在 Kindle 上的書不會改名。連線中改設定，下次連線才生效。 |
-| **置頂 Calibre 連線：開／關** | 讓書庫「最近」排序裡的 **Calibre 連線** 永遠排第一。每次連線結束時，把它的上次開啟時間設成「現在 + `pin_days` 天」（預設 365，在 `calibre-wireless.conf`），這段期間你打開的書都排在它下面；每連線一次就續期。打開時立刻套用一次。關掉只是不再改，不會還原原本的時間。 |
-| **KUAL 放最後：開／關** | 每次連線結束時，把 KUAL 的上次開啟時間設成 2000-01-01，讓它排在「最近」的最後。KUAL 每次被打開都會把自己移回最前面，要到下次連線結束才會再放回最後。 |
-| **Diagnose** | 把系統資訊寫到 `diagnose.txt`（只讀，不改任何東西）。接著在背景錄 2 分鐘電源與 Wi-Fi 事件到 `diagnose_events.txt`——這段時間內讓 Kindle 休眠再喚醒一次，然後把 Wi-Fi 關掉再打開。另外會把書庫資料庫（`/var/local/cc.db`，複製到 `/tmp` 後查複本）的只讀查詢結果附加到 `diagnose_ccdb.txt`、列出系統字型並用它們在畫面上畫幾行範例（請拍照），並把書庫服務的程式（`/usr/lib/ccat/*.lua`）複製到 `diagnose_ccat/`（驗證金鑰只記錄有沒有，不複製內容）。用來排查問題，或改成適合其他機型。 |
+| **檔名（繁體／簡體／原樣）：…** | 之後收到的書的檔名與資料夾名：繁體、簡體、跟 calibre 一樣。點一下輪替。已在 Kindle 上的書不會改名。連線中改設定，下次連線才生效。 |
+| **置頂 Calibre 連線（開／關）：…** | 讓書庫「最近」排序裡的 **Calibre 連線** 永遠排第一。每次連線結束時，把它的上次開啟時間設成「現在 + `pin_days` 天」（預設 365，在 `calibre-wireless.conf`），這段期間你打開的書都排在它下面；每連線一次就續期。打開時立刻套用一次。關掉只是不再改，不會還原原本的時間。 |
+| **KUAL 放最後（開／關）：…** | 每次連線結束時，把 KUAL 的上次開啟時間設成 2000-01-01，讓它排在「最近」的最後。KUAL 每次被打開都會把自己移回最前面，要到下次連線結束才會再放回最後。 |
+| **Diagnose** | 把系統資訊寫到 `diagnose.txt`（只讀，不改任何東西）。接著在背景錄 2 分鐘電源與 Wi-Fi 事件到 `diagnose_events.txt`——這段時間內讓 Kindle 休眠再喚醒一次，然後把 Wi-Fi 關掉再打開。另外會把書庫資料庫（`/var/local/cc.db`，複製到 `/tmp` 後查複本）的只讀查詢結果附加到 `diagnose_ccdb.txt`、列出系統字型與哪個訊息字型能用，並把書庫服務的程式（`/usr/lib/ccat/*.lua`）複製到 `diagnose_ccat/`（驗證金鑰只記錄有沒有，不複製內容）。用來排查問題，或改成適合其他機型。 |
 
 ## 一次連線會做什麼
 
@@ -158,7 +158,7 @@ Calibre Wireless ▸
 
 ## 已知限制
 
-- **畫面訊息是英文**：訊息是直接畫在螢幕上的（FBInk，沒裝 Universal Hotfix 時用 `eips`），這裡只能畫 ASCII。
+- **畫面訊息**：用 FBInk 的 TrueType 功能、以 Kindle 自己的字型直接畫在螢幕上：依序試 `STHeitiTC.ttf`、`STHeitiMedium.ttf`（都是中文），再來 `Amazon-Ember-Regular.ttf`（只有英文）。都不能用（或沒裝 Universal Hotfix）時，改用 FBInk 內建的點陣字或 `eips` 畫英文。
 - **擦掉後會留一條空白，等 Kindle 重畫才恢復**：訊息改的是螢幕像素，Kindle 介面不知道。結束時會擦掉，但那幾列原本的介面內容（例如閱讀進度那一行）要等介面重畫（翻頁、開書）才會回來。沒有查到能讓介面「只重畫、不切換畫面」的指令。訊息用 FBInk 畫（Universal Hotfix 附帶）；FBInk 不存在或執行失敗時，改用 `eips` 畫在靠近底部的位置（它的列高是估計值，位置可能略有不同），那一列被拒畫就畫在頂端。FBInk 失敗會在 log 記一次（`WARN: fbink failed`）。
 - **對時需要 Wi-Fi 能連到 `pool.ntp.org`**（UDP 123；kindle-kual-firewall 1.16 以上會放行）。剛開機的幾分鐘 Kindle 可能還沒有 DNS，那次連線可能對時失敗，log 會寫 `clock sync failed`。
 - **KFX 檔**還沒有首頁縮圖。

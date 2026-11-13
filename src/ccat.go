@@ -3,7 +3,7 @@ package main
 // Change an entry's "last opened" time (cc.db Entries.p_lastAccess) through the Kindle
 // library service itself (com.lab126.ccat, HTTP on 127.0.0.1:9101), which is what the
 // "Recent" sort of the library uses. Used by session.sh to keep the "Calibre 連線" book
-// first and KUAL last (v0.10.0).
+// first and KUAL last (v0.10.0; header-case fix v0.11.0).
 //
 // Why not sqlite3 directly: the index EntriesLastAccessIndex is
 // (p_lastAccess DESC, p_titles_0_collation COLLATE icu); the stand-alone sqlite3 on the
@@ -96,7 +96,10 @@ func ccatUpdateLastAccess(token, uuid string, ts int64) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
-		req.Header.Set("AuthToken", token)
+		// Set the map directly: Header.Set would canonicalize the name to "Authtoken", and the
+		// Kindle's service answered that with HTTP 401 "Unauthorized request." (v0.10.0 on
+		// 5.13.5). LibrarianSync (Python requests) sends "AuthToken" exactly like this.
+		req.Header["AuthToken"] = []string{token}
 	}
 	// No proxy: the service is on loopback.
 	cl := &http.Client{Timeout: ccatTimeout, Transport: &http.Transport{Proxy: nil}}

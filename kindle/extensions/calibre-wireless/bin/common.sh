@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless common.sh v0.10.0 — 各腳本共用的路徑與函式
+# calibre-wireless common.sh v0.11.0 — 各腳本共用的路徑與函式
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$BASE/calibre-wireless.conf"
@@ -90,7 +90,59 @@ eips_line() {
     fi
 }
 
-# 畫一列（slot 從底部算）；$2 是要畫的完整字串
+# ---- TrueType 字型（v0.11.0）----
+# FBInk 內建點陣字放大後很粗糙（使用者：「非常醜」），Hotfix 的 FBInk 有 -t（TrueType），
+# 用 Kindle 系統字型畫，字形跟書庫介面一致，也能畫中文。v0.10.0 Diagnose 實拍（Oasis 2、5.13.5）：
+# STHeitiMedium 中英都正常；Amazon Ember／Bookerly 沒有中文（方框）。
+# 依序試，前一個不能用才換下一個（使用者定的順序）。「|zh」＝可以畫中文訊息，「|en」＝只畫英文訊息：
+#   1. STHeitiTC     繁體黑體（台灣字形，建議）
+#   2. STHeitiMedium 黑體（使用者在實拍裡選的）
+#   3. Amazon-Ember-Regular  Kindle 介面的英文字型，每台都有，但沒有中文
+# 都不能用才退回 FBInk 點陣字／eips（英文）。FBInk 畫缺字不會報錯（只畫方框），所以只能
+# 依「檔案在不在、FBInk 有沒有回錯」判斷能不能用。
+TT_FONTS="/usr/java/lib/fonts/STHeitiTC.ttf|zh /usr/java/lib/fonts/STHeitiMedium.ttf|zh /usr/java/lib/fonts/Amazon-Ember-Regular.ttf|en"
+TT_FAILED="/tmp/calibre-wireless.ttf-failed"
+# 字的高度 (px)；v0.10.0 範例用 size=10（≈42 px）偏大
+TT_PX=32
+# 一個提示列的高度 (px)，含上下留白
+TT_LINE_PX=48
+# 最底下一列離螢幕底邊多少 (px)
+TT_BOTTOM_PX=8
+# 左右留白 (px)
+TT_SIDE_PX=24
+SCREEN_YRES=""
+
+# 螢幕高度 (px)，讀不到就空字串（同 eips_rows 的來源）
+screen_yres() {
+    [ -n "$SCREEN_YRES" ] || SCREEN_YRES="$(eips -i 2>/dev/null | awk '/yres:/ { for (i = 1; i <= NF; i++) if ($i == "yres:") { print $(i + 1); exit } }')"
+    case "$SCREEN_YRES" in ''|*[!0-9]*) SCREEN_YRES=""; return 1 ;; esac
+    echo "$SCREEN_YRES"
+}
+
+# 用 TrueType 畫一列；$1 slot（從底部算）、$2 英文、$3 中文。全部字型都不能用就回傳 1。
+# padding=FULL：把整個提示列的方塊塗成白底再畫字 → 舊字一定蓋得掉，擦除就是畫一個空白。
+tt_line() {
+    [ -n "$FBINK" ] || return 1
+    # 不用 $(…)：子 shell 裡設的 SCREEN_YRES 帶不回來，每畫一次就要再跑一次 eips -i
+    screen_yres >/dev/null || return 1
+    yres="$SCREEN_YRES"
+    top=$((yres - TT_BOTTOM_PX - $1 * TT_LINE_PX))
+    bottom=$((yres - top - TT_LINE_PX))
+    for entry in $TT_FONTS; do
+        font="${entry%|*}"; lang="${entry#*|}"
+        [ -f "$font" ] || continue
+        grep -qxF "$font" "$TT_FAILED" 2>/dev/null && continue
+        if [ "$lang" = zh ] && [ -n "$3" ]; then text="$3"; else text="$2"; fi
+        err="$("$FBINK" -q -t "regular=$font,px=$TT_PX,top=$top,bottom=$bottom,left=$TT_SIDE_PX,right=$TT_SIDE_PX,padding=FULL" "$text" 2>&1)"
+        rc=$?
+        [ "$rc" = 0 ] && return 0
+        log "WARN: fbink TrueType failed (rc=$rc, $font): $err - trying the next font" "警告：TrueType 字型畫不出來，改試下一個（原因見上一行）"
+        echo "$font" >> "$TT_FAILED"
+    done
+    return 1
+}
+
+# 畫一列（slot 從底部算）；$2 是要畫的完整字串（點陣字型，ASCII）
 draw_line() {
     if [ -n "$FBINK" ]; then
         err="$("$FBINK" -q -y "-$1" -r "$2" 2>&1)"
@@ -104,21 +156,25 @@ draw_line() {
     eips_line "$1" "$2"
 }
 
+# 畫面提示：notify "<英文>" "<中文>" [slot]。先試 TrueType（能畫中文的字型就畫中文），
+# 不行才用點陣字畫英文。中文留空＝只有英文。
 notify() {
+    tt_line "${3:-1}" "$1" "$2" && return 0
     # 右邊補空白：蓋掉上一句較長的字（eips 不會自己補）
-    draw_line "${2:-1}" "  $1                                        "
+    draw_line "${3:-1}" "  $1                                        "
 }
 
 # 擦掉所有提示列
 clear_notify() {
     for slot in $NOTIFY_SLOTS; do
+        tt_line "$slot" " " " " && continue
         draw_line "$slot" "                                                            "
     done
 }
 
-# 顯示一句、過幾秒擦掉；背景執行，不拖住呼叫的人
+# 顯示一句、過幾秒擦掉；背景執行，不拖住呼叫的人。參數同 notify
 notify_brief() {
-    notify "$1" "$2"
+    notify "$1" "$2" "$3"
     ( sleep "$NOTIFY_CLEAR_DELAY_S"; clear_notify ) </dev/null >/dev/null 2>&1 &
 }
 
@@ -212,9 +268,10 @@ onoff_label() {
 # 沒生效的話，重新打開 KUAL 選單也會看到新標籤）。
 render_menu() {
     if session_running; then conn="斷開 calibre 連線"; else conn="連線到 calibre"; fi
-    fn="檔名：$(filename_label "$(conf_get filename_chinese traditional)")"
-    pin="置頂 Calibre 連線：$(onoff_label "$(conf_get pin_calibre_book on)")"
-    kual="KUAL 放最後：$(onoff_label "$(conf_get kual_last on)")"
+    # 括號裡列出所有可切換的狀態，冒號後是目前的狀態（使用者要求，2026-11-14）
+    fn="檔名（繁體／簡體／原樣）：$(filename_label "$(conf_get filename_chinese traditional)")"
+    pin="置頂 Calibre 連線（開／關）：$(onoff_label "$(conf_get pin_calibre_book on)")"
+    kual="KUAL 放最後（開／關）：$(onoff_label "$(conf_get kual_last on)")"
     cat > "$MENU.tmp" <<EOF
 {
   "items": [

@@ -60,6 +60,8 @@ func loadConfig(path string) Config {
 			default:
 				log.Printf("config: filename_chinese=%q unknown, using %q", v, cfg.FilenameChinese)
 			}
+		case "pin_calibre_book", "pin_days", "kual_last":
+			// Read by the shell scripts (common.sh apply_recent_order), not by this program.
 		default:
 			log.Printf("config: unknown key %q ignored", k)
 		}

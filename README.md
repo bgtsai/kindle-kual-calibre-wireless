@@ -83,19 +83,19 @@ Everything is under one entry in KUAL:
 ```
 Calibre Wireless ▸
     連線到 calibre  /  斷開 calibre 連線
-    檔名：繁體  /  簡體  /  原樣
-    置頂 Calibre 連線：開  /  關
-    KUAL 放最後：開  /  關
+    檔名（繁體／簡體／原樣）：繁體
+    置頂 Calibre 連線（開／關）：開
+    KUAL 放最後（開／關）：開
     Diagnose (write diagnose.txt)
 ```
 
-| Item | What it does |
+| Item (the part in brackets lists the choices, after the colon is the current one) | What it does |
 | --- | --- |
 | **連線到 calibre / 斷開 calibre 連線** | Connect / disconnect. The label shows the current state. Same as tapping the **Calibre 連線** book. |
-| **檔名：繁體 / 簡體 / 原樣** | File and folder names of newly received books: Traditional Chinese / Simplified Chinese / exactly as in calibre. Tap to cycle. Books already on the Kindle are not renamed. Changing it while connected takes effect from the next connection. |
-| **置頂 Calibre 連線：開 / 關** | Keeps the **Calibre 連線** book first in the library's "Recent" sort. When a connection ends, its last-opened time is set to now + `pin_days` days (default 365, in `calibre-wireless.conf`), so books you open in the meantime stay below it; each connection renews it. Turning it on applies it at once. Turning it off only stops the change (the old time isn't restored). |
-| **KUAL 放最後：開 / 關** | When a connection ends, sets KUAL's last-opened time to 2000-01-01 so it sorts last in "Recent". KUAL moves itself to the top again whenever it is opened, so it goes back to the bottom at the next connection end. |
-| **Diagnose** | Writes system information to `diagnose.txt` (read-only, changes nothing). Then, for 2 minutes in the background, records power and Wi-Fi events to `diagnose_events.txt` — put the Kindle to sleep and wake it once, then turn Wi-Fi off and on during that time. It also appends a read-only query of the library database (`/var/local/cc.db`, queried on a copy in `/tmp`) to `diagnose_ccdb.txt`, lists the system fonts and draws a few sample lines with them (photograph the screen), and copies the library service's scripts (`/usr/lib/ccat/*.lua`) to `diagnose_ccat/` (the session token is only reported as present/absent, never copied). Used for troubleshooting and for adapting the extension to another model. |
+| **檔名（繁體／簡體／原樣）：…** | File and folder names of newly received books: Traditional Chinese / Simplified Chinese / exactly as in calibre. Tap to cycle. Books already on the Kindle are not renamed. Changing it while connected takes effect from the next connection. |
+| **置頂 Calibre 連線（開／關）：…** | Keeps the **Calibre 連線** book first in the library's "Recent" sort. When a connection ends, its last-opened time is set to now + `pin_days` days (default 365, in `calibre-wireless.conf`), so books you open in the meantime stay below it; each connection renews it. Turning it on applies it at once. Turning it off only stops the change (the old time isn't restored). |
+| **KUAL 放最後（開／關）：…** | When a connection ends, sets KUAL's last-opened time to 2000-01-01 so it sorts last in "Recent". KUAL moves itself to the top again whenever it is opened, so it goes back to the bottom at the next connection end. |
+| **Diagnose** | Writes system information to `diagnose.txt` (read-only, changes nothing). Then, for 2 minutes in the background, records power and Wi-Fi events to `diagnose_events.txt` — put the Kindle to sleep and wake it once, then turn Wi-Fi off and on during that time. It also appends a read-only query of the library database (`/var/local/cc.db`, queried on a copy in `/tmp`) to `diagnose_ccdb.txt`, lists the system fonts and which message font is usable, and copies the library service's scripts (`/usr/lib/ccat/*.lua`) to `diagnose_ccat/` (the session token is only reported as present/absent, never copied). Used for troubleshooting and for adapting the extension to another model. |
 
 ## What happens during a session
 
@@ -158,7 +158,7 @@ Lines with `-` in the date come from the shell scripts and are written twice: En
 
 ## Known limitations
 
-- **The on-screen messages are English**: they are drawn directly on the screen (FBInk, or `eips` without the Universal Hotfix), which only does ASCII here.
+- **On-screen messages**: drawn directly on the screen with FBInk's TrueType support in the Kindle's own fonts — `STHeitiTC.ttf`, then `STHeitiMedium.ttf` (both Chinese), then `Amazon-Ember-Regular.ttf` (English only). If none works (or there is no Universal Hotfix), FBInk's blocky built-in font or `eips` draws them in English.
 - **Wiped messages leave a blank line until the Kindle redraws**: the messages replace screen pixels the Kindle's own interface doesn't know about. They are wiped at the end, but whatever the interface showed in those lines (e.g. the reading progress line) only comes back when it redraws (turning a page, opening a book). No command was found that makes the interface redraw without switching screens. Messages are drawn with FBInk (comes with the Universal Hotfix); if FBInk is missing or fails, `eips` draws them near the bottom instead (its row height is estimated, so the exact position may differ), or at the top if that row is rejected. An FBInk failure is written to the log once (`WARN: fbink failed`).
 - **Clock sync needs Wi-Fi internet access** to `pool.ntp.org` (UDP 123; kindle-kual-firewall ≥ 1.16 allows it). Right after boot the Kindle may have no DNS for a few minutes, so the first session after boot may skip the sync — the log shows `clock sync failed`.
 - **KFX files**: no home-screen thumbnail yet.

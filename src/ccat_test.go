@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 // Fake library service: checks what change.lua and the 5.12+ AuthToken check need,
@@ -106,5 +110,50 @@ func TestSetLastAccessBadSpec(t *testing.T) {
 	}
 	if len(got) != 1 {
 		t.Errorf("want only the valid item sent, got %d requests", len(got))
+	}
+}
+
+// The header name must go out as "AuthToken" exactly: the Kindle's service answered
+// Go's canonical "Authtoken" with 401 (v0.10.0, 5.13.5). net/http servers canonicalize
+// incoming names, so read the raw request bytes.
+func TestSetLastAccessHeaderCase(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	raw := make(chan string, 1)
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		br := bufio.NewReader(c)
+		var head strings.Builder
+		for {
+			line, err := br.ReadString('\n')
+			head.WriteString(line)
+			if err != nil || line == "\r\n" {
+				break
+			}
+		}
+		raw <- head.String()
+		io.WriteString(c, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 13\r\nConnection: close\r\n\r\n{\"ok\":true}\r\n")
+	}()
+	dir := t.TempDir()
+	tf := filepath.Join(dir, "session_token")
+	os.WriteFile(tf, []byte("tok"), 0600)
+	oldURL, oldTok := ccatURL, ccatTokenFile
+	ccatURL, ccatTokenFile = "http://"+ln.Addr().String()+"/change", tf
+	defer func() { ccatURL, ccatTokenFile = oldURL, oldTok }()
+	setLastAccess("u=1")
+	select {
+	case h := <-raw:
+		if !strings.Contains(h, "\r\nAuthToken: tok\r\n") {
+			t.Errorf("request head lacks exact \"AuthToken: tok\":\n%s", h)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no request received")
 	}
 }

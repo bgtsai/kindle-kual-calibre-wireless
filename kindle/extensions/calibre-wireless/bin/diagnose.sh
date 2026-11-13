@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless diagnose.sh v0.10.0 — 唯讀，不改任何設定
+# calibre-wireless diagnose.sh v0.11.0 — 唯讀，不改任何設定
 # 結果寫到使用者區（USB 拿得到）：
 #   extensions/calibre-wireless/diagnose.txt         一次性的系統資訊
 #   extensions/calibre-wireless/diagnose_events.txt  按下後 EVENT_RECORD_S 秒內的 powerd／wifid／cmd 事件
@@ -22,7 +22,7 @@ POLL_S=3
 section() { echo; echo "===== $1 ====="; }
 
 {
-    echo "calibre-wireless diagnose v0.10.0  $(date)"
+    echo "calibre-wireless diagnose v0.11.0  $(date)"
 
     section "firmware / kernel"
     cat /etc/prettyversion.txt 2>&1
@@ -62,13 +62,19 @@ section() { echo; echo "===== $1 ====="; }
     eips -i 2>&1
     echo "eips_rows (yres / EIPS_ROW_PX=$EIPS_ROW_PX): $(eips_rows)"
 
-    section "fonts (for smoother on-screen messages, v0.10.0)"
+    section "fonts (TrueType on-screen messages, v0.11.0)"
+    echo "font chain (first usable wins; |zh = Chinese messages):"
+    for entry in $TT_FONTS; do
+        f="${entry%|*}"
+        printf '  %s: ' "$entry"
+        if [ ! -f "$f" ]; then echo "missing"; elif grep -qxF "$f" "$TT_FAILED" 2>/dev/null; then echo "marked failed ($TT_FAILED)"; else echo "present"; fi
+    done
+    echo "screen yres: $(screen_yres)  TT_PX=$TT_PX TT_LINE_PX=$TT_LINE_PX"
     echo "--- $FBINK -h (first lines + TrueType option)"
     [ -n "$FBINK" ] && { "$FBINK" -h 2>&1 | head -n 3; "$FBINK" -h 2>&1 | grep -i -E 'truetype|-t,' | head -n 5; }
     for d in /usr/java/lib/fonts /usr/share/fonts /mnt/us/fonts; do
         echo "--- ls -l $d"; ls -l "$d" 2>&1
     done
-    echo "font samples drawn on screen: see 'font samples' at the end of this file"
 
     section "clock"
     echo "date: $(date)  hwclock: $(hwclock -r 2>&1)"
@@ -176,40 +182,7 @@ done
     done
     kill "$w1" "$w2" "$w3" 2>/dev/null
     echo >> "$EVENTS"; echo "end $(date)" >> "$EVENTS"
-    notify_brief "calibre-wireless: events recorded"
+    notify_brief "calibre-wireless: events recorded" "calibre-wireless：事件已錄好"
 ) </dev/null >/dev/null 2>&1 &
 
-# ---- 字型範例（v0.10.0）：用 Kindle 系統字型畫幾行，使用者拍照挑字型 ----
-# 目前的畫面訊息是 FBInk 內建點陣字型，放大後很粗糙；FBInk 完整版可用 -t 畫 TrueType/OpenType。
-# 放在最後才畫：KUAL 關閉時書庫會重畫，太早畫會被蓋掉（v0.7.0 實機）。
-# （v0.9.x 以前這裡畫 rN 列號標記；Oasis 2 的照片已存，列高 24 px，不再需要。）
-# 挑字型：Amazon Ember、Bookerly 各一，再加最多兩個檔名像中文字型的；先排除粗體／斜體
-FONT_DIR=/usr/java/lib/fonts
-pick_fonts() {
-    ls "$FONT_DIR" 2>/dev/null | grep -i -E '\.(ttf|otf|ttc)$' | grep -v -i -E 'bold|italic|oblique' > /tmp/calibre-wireless.fonts
-    for pat in 'ember' 'bookerly'; do
-        grep -i "$pat" /tmp/calibre-wireless.fonts | head -n 1
-    done
-    grep -i -E 'tc|sc|hei|song|kai|ming|cjk|gothic|mincho|ying|zh' /tmp/calibre-wireless.fonts | grep -v -i -E 'ember|bookerly' | head -n 2
-    rm -f /tmp/calibre-wireless.fonts
-}
-{
-    echo; echo "===== font samples $(date) ====="
-    echo "FBINK=$FBINK  FONT_DIR=$FONT_DIR"
-    i=1
-    # 一行一個檔名（檔名可能有空白，不用 for … in $(…)）
-    pick_fonts > /tmp/calibre-wireless.picked
-    while IFS= read -r f; do
-        [ -n "$f" ] || continue
-        y=$((260 + i * 150))
-        txt="$i $f  Connected 1/3  已連線 第 1/3 本"
-        echo "--- $i: $FONT_DIR/$f  (top=${y}px)"
-        if [ -n "$FBINK" ]; then
-            "$FBINK" -q -t "regular=$FONT_DIR/$f,size=10,top=$y,left=40" "$txt" 2>&1; echo "rc=$?"
-        fi
-        i=$((i + 1))
-    done < /tmp/calibre-wireless.picked
-    rm -f /tmp/calibre-wireless.picked
-    [ "$i" = 1 ] && echo "no font picked (empty $FONT_DIR or no FBInk)"
-} >> "$OUT" 2>&1
-notify "diagnose.txt written - photo the font samples, then sleep/wake + toggle Wi-Fi (2 min)"
+notify "diagnose.txt written - now sleep/wake + toggle Wi-Fi (2 min)" "已寫入 diagnose.txt；2 分鐘內讓 Kindle 休眠再喚醒、切一次 Wi-Fi"

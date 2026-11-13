@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless session.sh v0.10.0
+# calibre-wireless session.sh v0.11.0
 # 一次連線階段，由 toggle.sh 在背景啟動（單一實例：toggle.sh 寫 $PIDFILE）。
 #   解除飛行模式 → 等 Wi-Fi 連上（最多 WIFI_WAIT_S）→ 開 INPUT 讓 calibre 的廣播回覆進來
 #   → 防休眠 → 跑 Go client → 結束（任何原因）一律：恢復休眠、關 INPUT、回飛行模式、掃描書庫。
@@ -131,9 +131,9 @@ run_client() {
             case "$line" in
                 *"book "*/*" received"*)
                     nn="$(echo "$line" | sed -n 's/.*book \([0-9]*\/[0-9]*\) received.*/\1/p')"
-                    notify "calibre: received $nn" "$PROGRESS_ROW" ;;
-                *"connected to calibre"*) notify "calibre: connected" ;;
-                *"auto-disconnect"*)      notify "calibre: idle, disconnecting" ;;
+                    notify "calibre: received $nn" "calibre：已收到 第 $nn 本" "$PROGRESS_ROW" ;;
+                *"connected to calibre"*) notify "calibre: connected" "calibre：已連線" ;;
+                *"auto-disconnect"*)      notify "calibre: idle, disconnecting" "calibre：閒置太久，斷線" ;;
             esac
         done < "$FIFO"
     ) &
@@ -152,39 +152,39 @@ run_client() {
 
 log "Session start" "開始連線"
 render_menu
-notify "calibre: turning on Wi-Fi..."
+notify "calibre: turning on Wi-Fi..." "calibre：開啟 Wi-Fi 中…"
 lipc-set-prop -i com.lab126.cmd wirelessEnable 1 2>>"$LOG"
 
 tries=0
 while :; do
     if ! wait_wifi; then
-        if [ "$stopping" = 1 ]; then notify "calibre: disconnected"; break; fi
+        if [ "$stopping" = 1 ]; then notify "calibre: disconnected" "calibre：已斷線"; break; fi
         log "Wi-Fi not connected within ${WIFI_WAIT_S}s, giving up" "Wi-Fi ${WIFI_WAIT_S} 秒內沒連上，放棄"
-        notify "calibre: Wi-Fi not connected, gave up"
+        notify "calibre: Wi-Fi not connected, gave up" "calibre：Wi-Fi 連不上，放棄"
         break
     fi
     log "Wi-Fi connected" "Wi-Fi 已連上"
     # 只在第一次連上時對時（重連時不必再做）
     [ "$tries" = 0 ] && sync_clock
-    notify "calibre: searching for calibre..."
+    notify "calibre: searching for calibre..." "calibre：尋找電腦上的 calibre…"
     input_open
     sleep_block 1
     run_client
     rc=$?
     log "client exited rc=$rc" "連線程式結束，結束碼 $rc"
-    [ "$stopping" = 1 ] && { notify "calibre: disconnected"; break; }
+    [ "$stopping" = 1 ] && { notify "calibre: disconnected" "calibre：已斷線"; break; }
     case "$rc" in
-        0) notify "calibre: disconnected"; break ;;
-        2) notify "calibre: calibre not found on network"; break ;;
+        0) notify "calibre: disconnected" "calibre：已斷線"; break ;;
+        2) notify "calibre: calibre not found on network" "calibre：網路上找不到 calibre"; break ;;
     esac
     # 非 0：連線中斷（多半是休眠時 Wi-Fi 斷掉）。喚醒後 Wi-Fi 會自己連回來，再試
     tries=$((tries + 1))
     if [ "$tries" -gt "$RECONNECT_MAX" ]; then
-        notify "calibre: connection lost, gave up"
+        notify "calibre: connection lost, gave up" "calibre：連線中斷，放棄"
         break
     fi
     log "Connection lost, reconnect $tries/$RECONNECT_MAX" "連線中斷，第 $tries 次重連"
-    notify "calibre: connection lost, reconnecting..."
+    notify "calibre: connection lost, reconnecting..." "calibre：連線中斷，重新連線中…"
     input_close
 done
 cleanup
