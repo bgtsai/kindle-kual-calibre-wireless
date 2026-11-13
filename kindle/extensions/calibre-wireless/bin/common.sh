@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless common.sh v0.11.0 — 各腳本共用的路徑與函式
+# calibre-wireless common.sh v0.12.0 — 各腳本共用的路徑與函式
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$BASE/calibre-wireless.conf"
@@ -178,6 +178,30 @@ notify_brief() {
     ( sleep "$NOTIFY_CLEAR_DELAY_S"; clear_notify ) </dev/null >/dev/null 2>&1 &
 }
 
+# ---- 連線中的狀態列（v0.12.0）----
+# 使用者回報：中途有好幾段沒有字，不知道現在在做什麼；而且 Kindle 介面一重畫（VoiceView 視窗、
+# 書庫更新），畫上去的字就被蓋掉、不會回來。所以：目前狀態寫進 STATUS_FILE，連線期間背景每
+# STATUS_REDRAW_S 秒重畫一次（被蓋掉最多這麼久就補回來），直到斷線後 NOTIFY_CLEAR_DELAY_S 秒才擦掉。
+# 狀態一律畫在最底下一列（slot 1）。
+STATUS_FILE="/tmp/calibre-wireless.status"
+# 重畫間隔 (s)：太短電子紙會一直局部更新，太長被蓋掉後空白太久
+STATUS_REDRAW_S=5
+
+# 設定並立刻畫出目前狀態：status_set "<英文>" "<中文>"
+status_set() {
+    printf '%s\n%s\n' "$1" "$2" > "$STATUS_FILE.tmp" && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
+    notify "$1" "$2"
+}
+
+# 背景重畫迴圈；STATUS_FILE 被刪掉就結束（session.sh 收尾時刪）
+status_redraw_loop() {
+    while [ -f "$STATUS_FILE" ]; do
+        sleep "$STATUS_REDRAW_S"
+        [ -f "$STATUS_FILE" ] || break
+        notify "$(sed -n 1p "$STATUS_FILE")" "$(sed -n 2p "$STATUS_FILE")"
+    done
+}
+
 # 連線階段是否正在跑
 session_running() {
     [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
@@ -283,7 +307,8 @@ render_menu() {
         { "name": "$fn", "priority": 2, "action": "./bin/filename_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "$pin", "priority": 3, "action": "./bin/pin_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "$kual", "priority": 4, "action": "./bin/kual_last_toggle.sh", "exitmenu": false, "refresh": true },
-        { "name": "Diagnose (write diagnose.txt)", "priority": 5, "action": "./bin/diagnose.sh" }
+        { "name": "Diagnose (write diagnose.txt)", "priority": 5, "action": "./bin/diagnose.sh" },
+        { "name": "錄連線事件（60 秒，查 VoiceView）", "priority": 6, "action": "./bin/events_record.sh" }
       ]
     }
   ]

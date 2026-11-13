@@ -11,7 +11,7 @@
 // Airplane mode, sleep prevention and library rescan are done by bin/session.sh.
 //
 // Log lines bin/session.sh matches (keep in sync): "connected to calibre",
-// "book <n>/<N> received", "auto-disconnect".
+// "book <n>/<N> receiving", "book <n>/<N> received", "auto-disconnect".
 //
 // Copyright (C) 2026 bgtsai. Licensed under GPL-3.0-or-later (UNCaGED is GPL-3.0).
 package main
@@ -33,7 +33,7 @@ import (
 	"github.com/shermp/UNCaGED/uc"
 )
 
-const version = "0.11.0"
+const version = "0.12.0"
 
 // client implements uc.Client. Metadata for every book calibre sent is kept in
 // one JSON file (stateFile) so calibre's "On device" column survives reconnects.
@@ -377,6 +377,9 @@ func (c *client) UpdateStatus(s uc.Status, p int) {
 func (c *client) BookStart(thisBook, totalBooks int) {
 	c.bookNo, c.bookTotal = thisBook+1, totalBooks
 	c.idle.stop()
+	// session.sh shows "receiving n/N" from this line (v0.12.0): before it, the screen showed
+	// nothing while a big book was being transferred.
+	log.Printf("book %d/%d receiving", c.bookNo, c.bookTotal)
 }
 
 func (c *client) LogPrintf(l uc.LogLevel, f string, a ...interface{}) {

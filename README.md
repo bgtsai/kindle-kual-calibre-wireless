@@ -87,6 +87,7 @@ Calibre Wireless ▸
     置頂 Calibre 連線（開／關）：開
     KUAL 放最後（開／關）：開
     Diagnose (write diagnose.txt)
+    錄連線事件（60 秒，查 VoiceView）
 ```
 
 | Item (the part in brackets lists the choices, after the colon is the current one) | What it does |
@@ -96,6 +97,7 @@ Calibre Wireless ▸
 | **置頂 Calibre 連線（開／關）：…** | Keeps the **Calibre 連線** book first in the library's "Recent" sort. When a connection ends, its last-opened time is set to now + `pin_days` days (default 365, in `calibre-wireless.conf`), so books you open in the meantime stay below it; each connection renews it. Turning it on applies it at once. Turning it off only stops the change (the old time isn't restored). |
 | **KUAL 放最後（開／關）：…** | When a connection ends, sets KUAL's last-opened time to 2000-01-01 so it sorts last in "Recent". KUAL moves itself to the top again whenever it is opened, so it goes back to the bottom at the next connection end. |
 | **Diagnose** | Writes system information to `diagnose.txt` (read-only, changes nothing). Then, for 2 minutes in the background, records power and Wi-Fi events to `diagnose_events.txt` — put the Kindle to sleep and wake it once, then turn Wi-Fi off and on during that time. It also appends a read-only query of the library database (`/var/local/cc.db`, queried on a copy in `/tmp`) to `diagnose_ccdb.txt`, lists the system fonts and which message font is usable, and copies the library service's scripts (`/usr/lib/ccat/*.lua`) to `diagnose_ccat/` (the session token is only reported as present/absent, never copied). Used for troubleshooting and for adapting the extension to another model. |
+| **錄連線事件（60 秒，查 VoiceView）** | Read-only. For 60 seconds, records the Kindle's Bluetooth / VoiceView / UI service events (lipc) with times to `diagnose_connect_events.txt`; tap **Calibre 連線** during that time. Used to find which connection step makes the VoiceView dialog appear. |
 
 ## What happens during a session
 
@@ -105,6 +107,7 @@ Calibre Wireless ▸
 4. Blocks sleep (`com.lab126.powerd preventScreenSaver`).
 5. Broadcasts to find calibre, again every few seconds for up to **5 minutes** (falls back to your subnet's broadcast address, e.g. `192.168.1.255`, if `255.255.255.255` fails right after boot), then talks to it over TCP.
 6. If the connection drops (usually because the Kindle slept), waits for Wi-Fi to come back and reconnects — up to 3 times.
+- The bottom line of the screen shows the current step the whole time (turning on Wi-Fi, setting the clock, searching, connected, receiving n/N, received, idle…) and is redrawn every 5 s, because the Kindle's own screen updates (dialogs, library refresh) paint over it.
 7. At the end, whatever the reason: sleep allowed again, firewall rule removed, airplane mode on, "Recent" order adjusted (the two menu items above, through the Kindle's own library service on `127.0.0.1:9101`), library rescan. The last message stays for 4 seconds, then the message lines are wiped.
 
 ### How long each step waits

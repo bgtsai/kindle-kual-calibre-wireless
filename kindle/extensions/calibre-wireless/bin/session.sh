@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless session.sh v0.11.0
+# calibre-wireless session.sh v0.12.0
 # 一次連線階段，由 toggle.sh 在背景啟動（單一實例：toggle.sh 寫 $PIDFILE）。
 #   解除飛行模式 → 等 Wi-Fi 連上（最多 WIFI_WAIT_S）→ 開 INPUT 讓 calibre 的廣播回覆進來
 #   → 防休眠 → 跑 Go client → 結束（任何原因）一律：恢復休眠、關 INPUT、回飛行模式、掃描書庫。
@@ -18,17 +18,31 @@ CALIBRE_BROADCAST_PORTS="54982 48123 39001 44044 59678"
 # 每個埠最多刪幾次 INPUT 規則（每次重連加一組，RECONNECT_MAX+1 組就夠，多留餘裕）
 INPUT_DELETE_MAX=10
 FIFO="/tmp/calibre-wireless.fifo"
-# 書本數的提示寫在底部第 2 列（狀態那列的上面），不蓋掉狀態
-PROGRESS_ROW=2
+# 收完最後一本後閒置多久自動斷線 (min)，只用在畫面訊息；實際計時在 Go client（idle.go afterBookTimeout）
+AFTER_BOOK_IDLE_MIN=3
+# iptables 被別的程序鎖住時（v0.11.0 實機：Wi-Fi 一連上，防火牆插件同時在重建規則
+# →「Resource temporarily unavailable」），最多試幾次、每次間隔幾秒 (s)
+IPTABLES_TRIES=5
+IPTABLES_RETRY_S=1
 
 cpid=""
 rpid=""
+spid=""
+final_msg=""
 stopping=0
 
 input_open() {
     for p in $CALIBRE_BROADCAST_PORTS; do
-        iptables -I INPUT -i wlan0 -p udp --sport "$p" -j ACCEPT 2>>"$LOG" \
-            || log "WARN: iptables INPUT rule for sport $p failed" "警告：INPUT 規則（來源埠 $p）加入失敗"
+        t=1
+        while ! err="$(iptables -I INPUT -i wlan0 -p udp --sport "$p" -j ACCEPT 2>&1)"; do
+            if [ "$t" -ge "$IPTABLES_TRIES" ]; then
+                log "WARN: iptables INPUT rule for sport $p failed after $t tries: $err" "警告：INPUT 規則（來源埠 $p）試了 $t 次仍加入失敗（原因見上一行）"
+                break
+            fi
+            t=$((t + 1))
+            sleep "$IPTABLES_RETRY_S"
+        done
+        [ "$t" -gt 1 ] && [ "$t" -lt "$IPTABLES_TRIES" ] && log "iptables INPUT rule for sport $p ok on try $t" "INPUT 規則（來源埠 $p）第 $t 次才加入成功"
     done
 }
 
@@ -109,8 +123,12 @@ cleanup() {
     rm -f "$PIDFILE"
     render_menu
     log "Session ended, airplane mode on" "連線結束，已回到飛行模式"
-    # 最後一句訊息留幾秒讓使用者看到，再把提示列擦掉（不然會一直殘留在畫面上）
+    # 失敗的原因（找不到 calibre、Wi-Fi 連不上…）留著給使用者看，不蓋成「已斷線」
+    [ -n "$final_msg" ] || status_set "calibre: disconnected, airplane mode on" "calibre：已斷線，回到飛行模式"
+    # 最後一句訊息留幾秒讓使用者看到（重畫迴圈還在跑），再停掉重畫、把提示列擦掉
     sleep "$NOTIFY_CLEAR_DELAY_S"
+    rm -f "$STATUS_FILE"
+    [ -n "$spid" ] && kill "$spid" 2>/dev/null
     clear_notify
 }
 
@@ -129,11 +147,18 @@ run_client() {
         while IFS= read -r line; do
             echo "$line" >> "$LOG"
             case "$line" in
+                *"book "*/*" receiving"*)
+                    nn="$(echo "$line" | sed -n 's/.*book \([0-9]*\/[0-9]*\) receiving.*/\1/p')"
+                    status_set "calibre: receiving book $nn..." "calibre：接收中 第 $nn 本…" ;;
                 *"book "*/*" received"*)
                     nn="$(echo "$line" | sed -n 's/.*book \([0-9]*\/[0-9]*\) received.*/\1/p')"
-                    notify "calibre: received $nn" "calibre：已收到 第 $nn 本" "$PROGRESS_ROW" ;;
-                *"connected to calibre"*) notify "calibre: connected" "calibre：已連線" ;;
-                *"auto-disconnect"*)      notify "calibre: idle, disconnecting" "calibre：閒置太久，斷線" ;;
+                    if [ "${nn%/*}" = "${nn#*/}" ]; then
+                        status_set "calibre: all ${nn#*/} received, auto-disconnect after $AFTER_BOOK_IDLE_MIN min idle" "calibre：已收到全部 ${nn#*/} 本，閒置 $AFTER_BOOK_IDLE_MIN 分鐘後自動斷線"
+                    else
+                        status_set "calibre: received book $nn" "calibre：已收到 第 $nn 本"
+                    fi ;;
+                *"connected to calibre"*) status_set "calibre: connected, waiting for books..." "calibre：已連線，等待 calibre 傳書…" ;;
+                *"auto-disconnect"*)      status_set "calibre: idle, disconnecting" "calibre：閒置太久，斷線" ;;
             esac
         done < "$FIFO"
     ) &
@@ -152,39 +177,44 @@ run_client() {
 
 log "Session start" "開始連線"
 render_menu
-notify "calibre: turning on Wi-Fi..." "calibre：開啟 Wi-Fi 中…"
+status_set "calibre: turning on Wi-Fi..." "calibre：開啟 Wi-Fi 中…"
+status_redraw_loop </dev/null >/dev/null 2>&1 &
+spid=$!
 lipc-set-prop -i com.lab126.cmd wirelessEnable 1 2>>"$LOG"
 
 tries=0
 while :; do
     if ! wait_wifi; then
-        if [ "$stopping" = 1 ]; then notify "calibre: disconnected" "calibre：已斷線"; break; fi
+        [ "$stopping" = 1 ] && break
         log "Wi-Fi not connected within ${WIFI_WAIT_S}s, giving up" "Wi-Fi ${WIFI_WAIT_S} 秒內沒連上，放棄"
-        notify "calibre: Wi-Fi not connected, gave up" "calibre：Wi-Fi 連不上，放棄"
+        status_set "calibre: Wi-Fi not connected, gave up" "calibre：Wi-Fi 連不上，放棄"; final_msg=1
         break
     fi
     log "Wi-Fi connected" "Wi-Fi 已連上"
     # 只在第一次連上時對時（重連時不必再做）
-    [ "$tries" = 0 ] && sync_clock
-    notify "calibre: searching for calibre..." "calibre：尋找電腦上的 calibre…"
+    if [ "$tries" = 0 ]; then
+        status_set "calibre: Wi-Fi connected, setting the clock..." "calibre：Wi-Fi 已連上，對時中…"
+        sync_clock
+    fi
+    status_set "calibre: searching for calibre..." "calibre：尋找電腦上的 calibre…"
     input_open
     sleep_block 1
     run_client
     rc=$?
     log "client exited rc=$rc" "連線程式結束，結束碼 $rc"
-    [ "$stopping" = 1 ] && { notify "calibre: disconnected" "calibre：已斷線"; break; }
+    [ "$stopping" = 1 ] && break
     case "$rc" in
-        0) notify "calibre: disconnected" "calibre：已斷線"; break ;;
-        2) notify "calibre: calibre not found on network" "calibre：網路上找不到 calibre"; break ;;
+        0) break ;;
+        2) status_set "calibre: calibre not found on network" "calibre：網路上找不到 calibre"; final_msg=1; break ;;
     esac
     # 非 0：連線中斷（多半是休眠時 Wi-Fi 斷掉）。喚醒後 Wi-Fi 會自己連回來，再試
     tries=$((tries + 1))
     if [ "$tries" -gt "$RECONNECT_MAX" ]; then
-        notify "calibre: connection lost, gave up" "calibre：連線中斷，放棄"
+        status_set "calibre: connection lost, gave up" "calibre：連線中斷，放棄"; final_msg=1
         break
     fi
     log "Connection lost, reconnect $tries/$RECONNECT_MAX" "連線中斷，第 $tries 次重連"
-    notify "calibre: connection lost, reconnecting..." "calibre：連線中斷，重新連線中…"
+    status_set "calibre: connection lost, reconnecting..." "calibre：連線中斷，重新連線中…"
     input_close
 done
 cleanup
