@@ -8,9 +8,7 @@
         { "name": "檔名（繁體／簡體／原樣）：繁體", "priority": 2, "action": "./bin/filename_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "置頂 Calibre 連線（開／關）：開", "priority": 3, "action": "./bin/pin_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "KUAL 放最後（開／關）：開", "priority": 4, "action": "./bin/kual_last_toggle.sh", "exitmenu": false, "refresh": true },
-        { "name": "Diagnose (write diagnose.txt)", "priority": 5, "action": "./bin/diagnose.sh" },
-        { "name": "錄連線事件（120 秒，查 VoiceView）", "priority": 6, "action": "./bin/events_record.sh" },
-        { "name": "測試：只開 Wi-Fi（不動飛航模式）", "priority": 7, "action": "./bin/wifi_only_test.sh" }
+        { "name": "Diagnose (write diagnose.txt)", "priority": 5, "action": "./bin/diagnose.sh" }
       ]
     }
   ]

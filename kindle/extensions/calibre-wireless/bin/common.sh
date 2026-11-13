@@ -1,5 +1,5 @@
 #!/bin/sh
-# calibre-wireless common.sh v0.14.0 — 各腳本共用的路徑與函式
+# calibre-wireless common.sh v0.15.1 — 各腳本共用的路徑與函式
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$BASE/calibre-wireless.conf"
@@ -340,9 +340,7 @@ render_menu() {
         { "name": "$fn", "priority": 2, "action": "./bin/filename_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "$pin", "priority": 3, "action": "./bin/pin_toggle.sh", "exitmenu": false, "refresh": true },
         { "name": "$kual", "priority": 4, "action": "./bin/kual_last_toggle.sh", "exitmenu": false, "refresh": true },
-        { "name": "Diagnose (write diagnose.txt)", "priority": 5, "action": "./bin/diagnose.sh" },
-        { "name": "錄連線事件（120 秒，查 VoiceView）", "priority": 6, "action": "./bin/events_record.sh" },
-        { "name": "測試：只開 Wi-Fi（不動飛航模式）", "priority": 7, "action": "./bin/wifi_only_test.sh" }
+        { "name": "Diagnose (write diagnose.txt)", "priority": 5, "action": "./bin/diagnose.sh" }
       ]
     }
   ]
